@@ -1,0 +1,198 @@
+@import "tailwindcss";
+
+:root {
+  /* Bright TV CI */
+  --bt-navy: #093351;
+  --bt-navy-700: #0c425f;
+  --bt-navy-50: #eef3f7;
+  --bt-red: #e4262b;
+  --bt-red-600: #c81f24;
+  --bt-text: #14202b;
+  --bt-muted: #5b6b7a;
+  --bt-line: #e6ebf0;
+  --bt-bg: #f6f8fa;
+  --background: #ffffff;
+  --foreground: var(--bt-text);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-bt-navy: var(--bt-navy);
+  --color-bt-navy-700: var(--bt-navy-700);
+  --color-bt-navy-50: var(--bt-navy-50);
+  --color-bt-red: var(--bt-red);
+  --color-bt-red-600: var(--bt-red-600);
+  --color-bt-text: var(--bt-text);
+  --color-bt-muted: var(--bt-muted);
+  --color-bt-line: var(--bt-line);
+  --color-bt-bg: var(--bt-bg);
+  --font-sans: var(--font-noto-thai);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-noto-thai), "Noto Sans Thai", -apple-system,
+    BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Article body styling — use Thongterm typeface for body copy */
+.article-body {
+  font-family: "thongterm", var(--font-noto-thai), "Noto Sans Thai", sans-serif;
+  font-size: 1.125rem;
+  line-height: 1.95;
+  color: var(--bt-text);
+}
+.article-body p {
+  margin: 0 0 1.1rem;
+}
+/* Headings, quotes and captions inside the article still use Noto Sans Thai */
+.article-body h1,
+.article-body h2,
+.article-body h3,
+.article-body h4,
+.article-body h5,
+.article-body h6,
+.article-body blockquote,
+.article-body figcaption {
+  font-family: var(--font-noto-thai), "Noto Sans Thai", sans-serif;
+}
+.article-body h2 {
+  font-size: 1.45rem;
+  font-weight: 700;
+  margin: 2rem 0 0.85rem;
+  color: var(--bt-navy);
+}
+.article-body h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 1.6rem 0 0.7rem;
+  color: var(--bt-navy);
+}
+.article-body a {
+  color: var(--bt-red);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.article-body img,
+.article-body figure img {
+  border-radius: 12px;
+  height: auto;
+  max-width: 100%;
+  margin: 1.2rem auto;
+  display: block;
+}
+.article-body figure {
+  margin: 1.4rem 0;
+}
+.article-body figcaption {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--bt-muted);
+  margin-top: 0.4rem;
+}
+.article-body blockquote {
+  position: relative;
+  margin: 2rem 0;
+  padding: 1.6rem 1.8rem 1.6rem 3.4rem;
+  background: linear-gradient(135deg, #fff5f5 0%, var(--bt-navy-50) 100%);
+  border: 1px solid rgba(228, 38, 43, 0.12);
+  border-left: 4px solid var(--bt-red);
+  border-radius: 14px;
+  color: var(--bt-navy);
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.85;
+  box-shadow: 0 2px 12px rgba(9, 51, 81, 0.06);
+}
+.article-body blockquote::before {
+  content: "“";
+  position: absolute;
+  top: -0.5rem;
+  left: 1rem;
+  font-family: Georgia, "Noto Serif", serif;
+  font-size: 5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--bt-red);
+  opacity: 0.85;
+  pointer-events: none;
+}
+.article-body blockquote p {
+  margin: 0;
+}
+.article-body blockquote p + p {
+  margin-top: 0.6rem;
+}
+.article-body ul,
+.article-body ol {
+  padding-left: 1.6rem;
+  margin: 0 0 1.1rem;
+}
+.article-body ul {
+  list-style: disc outside;
+}
+.article-body ol {
+  list-style: decimal outside;
+}
+.article-body ul ul {
+  list-style: circle outside;
+}
+.article-body ul ul ul {
+  list-style: square outside;
+}
+.article-body li {
+  margin-bottom: 0.5rem;
+  padding-left: 0.3rem;
+}
+.article-body li::marker {
+  color: var(--bt-red);
+  font-weight: 700;
+}
+.article-body iframe {
+  max-width: 100%;
+  border-radius: 12px;
+  margin: 1.2rem 0;
+}
+
+/* Line clamps */
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.clamp-4 {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Marquee */
+@keyframes bt-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.bt-marquee {
+  animation: bt-marquee 45s linear infinite;
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

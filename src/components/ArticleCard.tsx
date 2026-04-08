@@ -1,0 +1,147 @@
+import Image from "next/image";
+import Link from "next/link";
+import {
+  WPPost,
+  getFeaturedImage,
+  getPostPath,
+  getPrimaryCategory,
+  stripHtml,
+  timeAgoTH,
+} from "@/lib/wp";
+
+type Variant = "hero" | "feature" | "list" | "compact" | "small";
+
+const PLACEHOLDER =
+  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'><rect width='16' height='9' fill='%23eef3f7'/></svg>";
+
+export default function ArticleCard({
+  post,
+  variant = "list",
+  priority = false,
+}: {
+  post: WPPost;
+  variant?: Variant;
+  priority?: boolean;
+}) {
+  const img = getFeaturedImage(post, variant === "hero" ? "full" : "large");
+  const cat = getPrimaryCategory(post);
+  const title = stripHtml(post.title.rendered);
+  const excerpt = stripHtml(post.excerpt.rendered);
+  const href = getPostPath(post);
+
+  if (variant === "hero") {
+    return (
+      <Link href={href} className="group relative block overflow-hidden rounded-2xl">
+        <div className="relative aspect-[16/9] bg-[var(--bt-navy-50)]">
+          <Image
+            src={img?.url || PLACEHOLDER}
+            alt={img?.alt || title}
+            fill
+            sizes="(max-width: 1024px) 100vw, 800px"
+            className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+            priority={priority}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+        </div>
+        <div className="absolute left-0 right-0 bottom-0 p-5 sm:p-7 text-white">
+          {cat && (
+            <span className="inline-block mb-3 px-3 py-1 rounded-full bg-[var(--bt-red)] !text-white text-[11px] font-bold uppercase tracking-wider">
+              {cat.name}
+            </span>
+          )}
+          <h2 className="text-xl sm:text-3xl font-extrabold leading-snug clamp-3 group-hover:text-[#ffd6d8] transition-colors">
+            {title}
+          </h2>
+          <p className="mt-2 text-xs sm:text-sm text-white/80">{timeAgoTH(post.date)}</p>
+        </div>
+      </Link>
+    );
+  }
+
+  if (variant === "feature") {
+    return (
+      <Link href={href} className="group block">
+        <div className="relative aspect-[16/9] overflow-hidden rounded-xl bg-[var(--bt-navy-50)]">
+          <Image
+            src={img?.url || PLACEHOLDER}
+            alt={img?.alt || title}
+            fill
+            sizes="(max-width: 768px) 100vw, 400px"
+            className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+          />
+        </div>
+        <h3 className="mt-3 text-base sm:text-lg font-bold leading-snug text-[var(--bt-text)] clamp-2 group-hover:text-[var(--bt-red)] transition-colors">
+          {title}
+        </h3>
+        <p className="mt-1.5 text-xs text-[var(--bt-muted)]">{timeAgoTH(post.date)}</p>
+      </Link>
+    );
+  }
+
+  if (variant === "compact") {
+    return (
+      <Link href={href} className="group flex gap-3 items-stretch">
+        <div className="relative w-[140px] sm:w-[160px] aspect-[16/9] shrink-0 overflow-hidden rounded-lg bg-[var(--bt-navy-50)]">
+          <Image
+            src={img?.url || PLACEHOLDER}
+            alt={img?.alt || title}
+            fill
+            sizes="160px"
+            className="object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+          />
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+          {cat && (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--bt-red)] leading-none">
+              {cat.name}
+            </span>
+          )}
+          <h3 className="mt-1 text-[13px] sm:text-[14px] font-bold leading-snug text-[var(--bt-text)] clamp-2 group-hover:text-[var(--bt-red)] transition-colors">
+            {title}
+          </h3>
+          <p className="mt-1 text-[10px] text-[var(--bt-muted)] leading-none">{timeAgoTH(post.date)}</p>
+        </div>
+      </Link>
+    );
+  }
+
+  if (variant === "small") {
+    return (
+      <Link href={href} className="group block">
+        <h4 className="text-[14px] font-semibold leading-snug text-[var(--bt-text)] clamp-2 group-hover:text-[var(--bt-red)] transition-colors">
+          {title}
+        </h4>
+        <p className="mt-1 text-[11px] text-[var(--bt-muted)]">{timeAgoTH(post.date)}</p>
+      </Link>
+    );
+  }
+
+  // list (default)
+  return (
+    <Link href={href} className="group flex gap-4 items-start py-4 border-b border-[var(--bt-line)] last:border-0">
+      <div className="relative w-[140px] sm:w-[180px] aspect-[16/9] shrink-0 overflow-hidden rounded-lg bg-[var(--bt-navy-50)]">
+        <Image
+          src={img?.url || PLACEHOLDER}
+          alt={img?.alt || title}
+          fill
+          sizes="180px"
+          className="object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+        />
+      </div>
+      <div className="flex-1 min-w-0">
+        {cat && (
+          <span className="inline-block text-[11px] font-bold uppercase tracking-wider text-[var(--bt-red)]">
+            {cat.name}
+          </span>
+        )}
+        <h3 className="mt-1 text-base sm:text-lg font-bold leading-snug text-[var(--bt-text)] clamp-2 group-hover:text-[var(--bt-red)] transition-colors">
+          {title}
+        </h3>
+        {excerpt && (
+          <p className="hidden sm:block mt-1.5 text-sm text-[var(--bt-muted)] clamp-2">{excerpt}</p>
+        )}
+        <p className="mt-2 text-[12px] text-[var(--bt-muted)]">{timeAgoTH(post.date)}</p>
+      </div>
+    </Link>
+  );
+}
