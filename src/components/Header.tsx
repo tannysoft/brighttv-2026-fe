@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PRIMARY_NAV } from "@/lib/categories";
-import { thaiDate } from "@/lib/wp";
+import { thaiDate } from "@/lib/utils";
 import FontSizeControl from "./FontSizeControl";
 
 export default function Header() {
@@ -195,7 +195,7 @@ export default function Header() {
                 <Link
                   href="/"
                   aria-label="หน้าแรก"
-                  className="flex items-center justify-center h-12 w-11 text-[var(--bt-navy)] hover:text-[var(--bt-red)] transition-colors"
+                  className="flex items-center h-12 pr-3 text-[var(--bt-navy)] hover:text-[var(--bt-red)] transition-colors"
                 >
                   <HomeIcon />
                 </Link>

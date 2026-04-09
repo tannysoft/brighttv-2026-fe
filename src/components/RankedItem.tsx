@@ -1,5 +1,6 @@
 import ArticleCard from "./ArticleCard";
-import { formatViews, type WPPost } from "@/lib/wp";
+import type { WPPost } from "@/lib/wp";
+import { formatViews } from "@/lib/utils";
 
 // Leaderboard row used by both the homepage "กำลังเป็นที่สนใจ" and the
 // article page "ข่าวยอดนิยม" sidebars. Left column stacks a big rank number

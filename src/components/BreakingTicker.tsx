@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getPosts, stripHtml } from "@/lib/wp";
+import { getPosts } from "@/lib/wp";
+import { stripHtml } from "@/lib/utils";
 
 export default async function BreakingTicker() {
   const posts = await getPosts({ perPage: 10 });

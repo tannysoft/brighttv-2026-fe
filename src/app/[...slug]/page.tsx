@@ -2,21 +2,21 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { getArticleSidebar, getPostBySlug } from "@/lib/wp";
 import {
-  getArticleSidebar,
-  getPostBySlug,
+  getAuthorName,
   getFeaturedImage,
   getPostPath,
   getPrimaryCategory,
-  getAuthorName,
   getYoutubeId,
   sidebarPostToWPPost,
   stripHtml,
   thaiDate,
-} from "@/lib/wp";
+} from "@/lib/utils";
 import ArticleBody from "@/components/ArticleBody";
 import ArticleCard from "@/components/ArticleCard";
 import ArticleGallery from "@/components/ArticleGallery";
+import CopyLinkButton from "@/components/CopyLinkButton";
 import SectionTitle from "@/components/SectionTitle";
 import JsonLd from "@/components/JsonLd";
 import RankedItem from "@/components/RankedItem";
@@ -171,6 +171,11 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
                 color="#06C755"
                 icon="line"
               />
+              <CopyLinkButton
+                url={`https://www.brighttv.co.th${articlePath}`}
+                size="sm"
+                tooltipSide="top"
+              />
             </div>
           </div>
 
@@ -225,6 +230,7 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
                 title: stripHtml(p.title.rendered),
                 href: getPostPath(p),
                 thumbSrc: getFeaturedImage(p, "medium").url,
+                date: p.date,
               }))}
             />
           )}

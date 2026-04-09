@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { WPPost } from "@/lib/wp";
 import {
-  WPPost,
   formatViews,
   getFeaturedImage,
   getPostPath,
@@ -9,7 +9,7 @@ import {
   hasVideo,
   stripHtml,
   timeAgoTH,
-} from "@/lib/wp";
+} from "@/lib/utils";
 import PlayBadge from "./PlayBadge";
 
 type Variant = "hero" | "feature" | "list" | "compact" | "small";

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { timeAgoTH } from "@/lib/utils";
 
 type GalleryImage = {
   id: number;
@@ -26,6 +27,9 @@ export type RelatedPostItem = {
   title: string;
   href: string;
   thumbSrc: string;
+  /** ISO date string — passed to timeAgoTH for the meta row. Optional so
+   *  callers that don't have one can omit it safely. */
+  date?: string;
 };
 
 type Props = {
@@ -256,9 +260,16 @@ export default function ArticleGallery({
                               className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.06]"
                             />
                           </div>
-                          <h4 className="flex-1 min-w-0 text-[12px] font-bold leading-snug text-[var(--bt-text)] clamp-3 group-hover:text-[var(--bt-red)] transition-colors">
-                            {r.title}
-                          </h4>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-[12px] font-bold leading-snug text-[var(--bt-text)] clamp-2 group-hover:text-[var(--bt-red)] transition-colors">
+                              {r.title}
+                            </h4>
+                            {r.date && (
+                              <p className="mt-1 text-[10px] text-[var(--bt-muted)] leading-none">
+                                {timeAgoTH(r.date)}
+                              </p>
+                            )}
+                          </div>
                         </Link>
                       </li>
                     ))}
@@ -282,12 +293,33 @@ function ShareRow({ title, url }: { title: string; url: string }) {
   const x = `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`;
   const line = `https://line.me/R/msg/text/?${encodedTitle}%20${encodedUrl}`;
 
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = window.setTimeout(() => setCopied(false), 1800);
+    return () => window.clearTimeout(t);
+  }, [copied]);
+
   const copyLink = async (e: React.MouseEvent) => {
     e.preventDefault();
     try {
       await navigator.clipboard.writeText(url);
+      setCopied(true);
     } catch {
-      // ignore
+      // Fallback for older browsers / denied permission: legacy exec
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        setCopied(true);
+      } catch {
+        // give up silently
+      }
     }
   };
 
@@ -302,16 +334,51 @@ function ShareRow({ title, url }: { title: string; url: string }) {
       <ShareBtn href={line} label="LINE" bg="#06C755">
         <LineIcon />
       </ShareBtn>
-      <button
-        type="button"
-        onClick={copyLink}
-        aria-label="คัดลอกลิงก์"
-        title="คัดลอกลิงก์"
-        className="inline-flex items-center justify-center w-10 h-10 rounded-full !text-white hover:scale-110 transition-transform"
-        style={{ background: "#e4262b" }}
-      >
-        <LinkIcon />
-      </button>
+      <div className="relative inline-flex">
+        <button
+          type="button"
+          onClick={copyLink}
+          aria-label={copied ? "คัดลอกลิงก์แล้ว" : "คัดลอกลิงก์"}
+          title={copied ? "คัดลอกแล้ว" : "คัดลอกลิงก์"}
+          className="relative inline-flex items-center justify-center w-10 h-10 rounded-full !text-white hover:scale-110 transition-colors"
+          style={{ background: copied ? "#16a34a" : "#e4262b" }}
+        >
+          <span
+            className={`absolute inset-0 flex items-center justify-center transition-all duration-200 ${
+              copied ? "opacity-0 scale-75 rotate-[-20deg]" : "opacity-100 scale-100 rotate-0"
+            }`}
+          >
+            <LinkIcon />
+          </span>
+          <span
+            className={`absolute inset-0 flex items-center justify-center transition-all duration-200 ${
+              copied ? "opacity-100 scale-100 rotate-0" : "opacity-0 scale-75 rotate-[20deg]"
+            }`}
+          >
+            <CheckIcon />
+          </span>
+        </button>
+
+        {/* Floating toast to the RIGHT of the button. Equal padding all
+            around the label; the overlapping diamond handles the arrow so
+            we don't need asymmetric padding to make room for it. */}
+        <span
+          aria-live="polite"
+          className={`pointer-events-none absolute top-1/2 -translate-y-1/2 left-[calc(100%+14px)] z-20 whitespace-nowrap rounded-full bg-[var(--bt-navy)] !text-white text-[11px] font-bold pl-1.5 pr-1.5 py-1.5 shadow-lg transition-all duration-200 ${
+            copied ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-1"
+          }`}
+        >
+          {/* Diamond pushed 4px into the pill body so its vertical tips land
+              well inside the rounded-full curve (no visible gap where the
+              arrow meets the body). The left point still pokes out far
+              enough to read as a leftward arrow. */}
+          <span
+            aria-hidden
+            className="absolute top-1/2 left-1 -translate-x-1/2 -translate-y-1/2 rotate-45 w-3 h-3 bg-[var(--bt-navy)]"
+          />
+          <span className="relative">คัดลอกแล้ว</span>
+        </span>
+      </div>
     </div>
   );
 }
@@ -438,6 +505,14 @@ function LinkIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M20 6 9 17l-5-5" />
     </svg>
   );
 }

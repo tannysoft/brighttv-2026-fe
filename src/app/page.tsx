@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { DEFAULT_FEATURED_IMAGE, getMostViewPosts, getPosts, getPopularTags, getLottoLatest, getPostPath, hasVideo, sidebarPostToWPPost, stripHtml } from "@/lib/wp";
+import { getMostViewPosts, getPosts, getPopularTags, getLottoLatest } from "@/lib/wp";
+import {
+  DEFAULT_FEATURED_IMAGE,
+  getPostPath,
+  hasVideo,
+  sidebarPostToWPPost,
+  stripHtml,
+} from "@/lib/utils";
 import ArticleCard from "@/components/ArticleCard";
 import PlayBadge from "@/components/PlayBadge";
 import RankedItem from "@/components/RankedItem";

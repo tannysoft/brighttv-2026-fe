@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { getLottoLatest, getPosts, stripHtml } from "@/lib/wp";
+import { getLottoLatest, getPosts } from "@/lib/wp";
+import { stripHtml } from "@/lib/utils";
 import ArticleCard from "@/components/ArticleCard";
 import SectionTitle from "@/components/SectionTitle";
 import JsonLd from "@/components/JsonLd";

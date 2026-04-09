@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { getPosts, getFeaturedImage, getPostPath, hasVideo, stripHtml, timeAgoTH } from "@/lib/wp";
+import { getPosts } from "@/lib/wp";
+import { getFeaturedImage, getPostPath, hasVideo, stripHtml, timeAgoTH } from "@/lib/utils";
 import ArticleCard from "./ArticleCard";
 import PlayBadge from "./PlayBadge";
 import SectionTitle from "./SectionTitle";
