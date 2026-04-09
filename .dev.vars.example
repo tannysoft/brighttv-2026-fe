@@ -1,0 +1,15 @@
+# Local secrets/vars for `wrangler dev` / `npm run cf:preview`.
+# Copy this file to `.dev.vars` (gitignored) and fill in values.
+#
+# The keys here should mirror the ones declared in wrangler.jsonc's `vars`
+# block PLUS any secrets (which live only here locally, and go to
+# `wrangler secret put` for production).
+#
+# Anything set here is exposed as `process.env.<NAME>` inside the Worker
+# (via nodejs_compat_populate_process_env).
+
+WP_API_ORIGIN="https://www.brighttv.co.th"
+SITE_ORIGIN="https://www.brighttv.co.th"
+
+# Example runtime secret (never commit real values):
+# WP_REVALIDATE_TOKEN="change-me"

@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getArticleSidebar, getPostBySlug } from "@/lib/wp";
+import { SITE_ORIGIN, WP_API_ORIGIN } from "@/lib/env";
 import {
   getAuthorName,
   getFeaturedImage,
@@ -21,6 +22,7 @@ import SectionTitle from "@/components/SectionTitle";
 import JsonLd from "@/components/JsonLd";
 import RankedItem from "@/components/RankedItem";
 import StickyBottomAside from "@/components/StickyBottomAside";
+import TopKeywordsWidget from "@/components/TopKeywordsWidget";
 import { breadcrumbSchema, newsArticleSchema } from "@/lib/schema";
 
 export const revalidate = 600;
@@ -154,25 +156,25 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
             </div>
             <div className="flex items-center gap-2">
               <ShareIconLink
-                href={`https://www.facebook.com/sharer/sharer.php?u=https://www.brighttv.co.th${articlePath}`}
+                href={`https://www.facebook.com/sharer/sharer.php?u=${SITE_ORIGIN}${articlePath}`}
                 label="Facebook"
                 color="#1877F2"
                 icon="facebook"
               />
               <ShareIconLink
-                href={`https://twitter.com/intent/tweet?url=https://www.brighttv.co.th${articlePath}&text=${encodeURIComponent(title)}`}
+                href={`https://twitter.com/intent/tweet?url=${SITE_ORIGIN}${articlePath}&text=${encodeURIComponent(title)}`}
                 label="X"
                 color="#000"
                 icon="x"
               />
               <ShareIconLink
-                href={`https://line.me/R/msg/text/?${encodeURIComponent(title + " https://www.brighttv.co.th" + articlePath)}`}
+                href={`https://line.me/R/msg/text/?${encodeURIComponent(title + " " + SITE_ORIGIN + articlePath)}`}
                 label="LINE"
                 color="#06C755"
                 icon="line"
               />
               <CopyLinkButton
-                url={`https://www.brighttv.co.th${articlePath}`}
+                url={`${SITE_ORIGIN}${articlePath}`}
                 size="sm"
                 tooltipSide="top"
               />
@@ -224,7 +226,7 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
             <ArticleGallery
               images={post.gallery_images}
               articleTitle={title}
-              articleUrl={`https://www.brighttv.co.th${articlePath}`}
+              articleUrl={`${SITE_ORIGIN}${articlePath}`}
               relatedPosts={galleryRelated.map((p) => ({
                 id: p.id,
                 title: stripHtml(p.title.rendered),
@@ -265,6 +267,9 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
               </ol>
             </section>
           )}
+          {/* Trending-tag cloud — always last so the sticky calculation in
+              StickyBottomAside measures the full sidebar height. */}
+          <TopKeywordsWidget />
         </StickyBottomAside>
       </div>
 
@@ -287,7 +292,7 @@ async function PostTags({ tagIds }: { tagIds: number[] }) {
   try {
     const ids = tagIds.slice(0, 12).join(",");
     const res = await fetch(
-      `https://www.brighttv.co.th/wp-json/wp/v2/tags?include=${ids}&per_page=12`,
+      `${WP_API_ORIGIN}/wp-json/wp/v2/tags?include=${ids}&per_page=12`,
       { next: { revalidate: 600 } },
     );
     if (!res.ok) return null;

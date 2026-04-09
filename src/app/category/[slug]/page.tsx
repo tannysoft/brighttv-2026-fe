@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCategoryBySlug, getPosts } from "@/lib/wp";
 import { findNavBySlug } from "@/lib/categories";
 import ArticleCard from "@/components/ArticleCard";
+import HeroSideGrid from "@/components/HeroSideGrid";
 import SectionTitle from "@/components/SectionTitle";
 import JsonLd from "@/components/JsonLd";
 import { breadcrumbSchema, collectionPageSchema } from "@/lib/schema";
@@ -91,16 +92,12 @@ export default async function CategoryPage({
           <div className="lg:col-span-2">
             <ArticleCard post={lead} variant="hero" priority />
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-1 gap-4">
-            {rest.slice(0, 4).map((p) => (
-              <ArticleCard key={p.id} post={p} variant="compact" />
-            ))}
-          </div>
+          <HeroSideGrid posts={rest.slice(0, 4)} />
         </section>
       )}
 
       <SectionTitle title={`${categoryName}ทั้งหมด`} />
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
         {(page === 1 ? rest.slice(4) : posts).map((p) => (
           <ArticleCard key={p.id} post={p} variant="feature" />
         ))}

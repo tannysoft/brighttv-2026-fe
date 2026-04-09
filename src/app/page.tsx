@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { getMostViewPosts, getPosts, getPopularTags, getLottoLatest } from "@/lib/wp";
+import {
+  getLottoLatest,
+  getMostViewPosts,
+  getPopularTags,
+  getPosts,
+  getTopTags,
+} from "@/lib/wp";
 import {
   DEFAULT_FEATURED_IMAGE,
   getPostPath,
@@ -8,6 +14,7 @@ import {
   stripHtml,
 } from "@/lib/utils";
 import ArticleCard from "@/components/ArticleCard";
+import HeroSideGrid from "@/components/HeroSideGrid";
 import PlayBadge from "@/components/PlayBadge";
 import RankedItem from "@/components/RankedItem";
 import SectionTitle from "@/components/SectionTitle";
@@ -45,18 +52,14 @@ export default async function HomePage() {
             <div className="lg:col-span-2">
               <ArticleCard post={hero} variant="hero" priority />
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-1 gap-4">
-              {featured.slice(0, 4).map((p) => (
-                <ArticleCard key={p.id} post={p} variant="compact" />
-              ))}
-            </div>
+            <HeroSideGrid posts={featured.slice(0, 4)} />
           </section>
         )}
 
         {/* LATEST GRID */}
         <section className="mb-14">
           <SectionTitle title="ข่าวล่าสุด" href="/category/news" accent="red" />
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
             {recent.map((p) => (
               <ArticleCard key={p.id} post={p} variant="feature" />
             ))}
@@ -117,11 +120,7 @@ async function CrimeFullWidth() {
         <div className="lg:col-span-2">
           <ArticleCard post={lead} variant="hero" />
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-1 gap-4">
-          {rest.slice(0, 4).map((p) => (
-            <ArticleCard key={p.id} post={p} variant="compact" />
-          ))}
-        </div>
+        <HeroSideGrid posts={rest.slice(0, 4)} />
       </div>
     </section>
   );
@@ -487,15 +486,45 @@ async function VideoSection() {
 }
 
 async function PopularTags() {
-  const tags = await getPopularTags(20);
-  if (!tags.length) return null;
+  // Merge two tag sources in parallel:
+  //   1. `nuxt/v1/top-tags?is_home=true` → trending tags across recent
+  //      homepage-visible posts (fresh, contextual — ranked first)
+  //   2. `wp/v2/tags?orderby=count` → all-time popular tags (stable filler
+  //      for categories the trending feed didn't cover today)
+  // Dedupe by slug (case-insensitive) and keep the first occurrence so the
+  // trending list wins ordering when a tag appears in both lists.
+  const [trending, allTime] = await Promise.all([
+    getTopTags({ isHome: true }),
+    getPopularTags(20),
+  ]);
+
+  const seen = new Set<string>();
+  type MergedTag = { key: string | number; name: string; slug: string };
+  const merged: MergedTag[] = [];
+
+  for (const t of trending) {
+    const k = t.slug.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    merged.push({ key: `top-${t.term_id}`, name: t.name, slug: t.slug });
+  }
+  for (const t of allTime) {
+    const k = t.slug.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    merged.push({ key: `wp-${t.id}`, name: t.name, slug: t.slug });
+  }
+
+  if (!merged.length) return null;
+  const display = merged.slice(0, 30);
+
   return (
     <section className="mt-14">
       <SectionTitle title="แท็กยอดนิยม" />
       <div className="flex flex-wrap gap-2">
-        {tags.map((t) => (
+        {display.map((t) => (
           <Link
-            key={t.id}
+            key={t.key}
             href={`/tag/${t.slug}`}
             className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-[var(--bt-bg)] border border-[var(--bt-line)] text-sm font-semibold text-[var(--bt-navy)] hover:bg-[var(--bt-navy)] hover:!text-white hover:border-[var(--bt-navy)] transition-colors"
           >

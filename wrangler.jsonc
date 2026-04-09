@@ -1,0 +1,67 @@
+/**
+ * Cloudflare Workers config for the Bright TV headless front-end.
+ *
+ * The build output is produced by `@opennextjs/cloudflare` which compiles
+ * Next.js 16 into a single Worker + static asset bundle. Run with:
+ *
+ *   npm run cf:preview   # build + local wrangler dev
+ *   npm run cf:deploy    # build + deploy to production
+ *
+ * Docs: https://opennext.js.org/cloudflare
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "brighttv-2026-fe",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-03-01",
+  // nodejs_compat lets Next.js core modules (Buffer, async_hooks used by RSC,
+  // etc.) run unchanged. nodejs_compat_populate_process_env keeps any
+  // process.env.* reads working if you ever add them.
+  "compatibility_flags": [
+    "nodejs_compat",
+    // Populate `process.env.*` at runtime from the `vars` / secrets below so
+    // code written for plain Next.js (`process.env.X`) keeps working inside
+    // the Worker without needing to rewrite it to use Cloudflare bindings.
+    "nodejs_compat_populate_process_env"
+  ],
+
+  // --------------------------------------------------------------------
+  // Public runtime variables. These end up in `process.env.*` inside the
+  // Worker (thanks to nodejs_compat_populate_process_env above) and can be
+  // read both from Server Components and route handlers. Keep SECRETS out
+  // of this block — use `wrangler secret put NAME` for those.
+  //
+  // Local dev: copy .dev.vars.example → .dev.vars and set the same keys.
+  // --------------------------------------------------------------------
+  "vars": {
+    "WP_API_ORIGIN": "https://www.brighttv.co.th",
+    "SITE_ORIGIN": "https://www.brighttv.co.th"
+  },
+
+  // Static assets (public/, built _next/static/, images, fonts) are served
+  // directly by the Workers runtime from .open-next/assets — no egress from
+  // the script itself, so it's fast and cheap.
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  // --------------------------------------------------------------------
+  // ISR cache backend. OpenNext uses this KV namespace to store Next.js
+  // revalidate payloads (post lists, article sidebar, theme CSS). Create
+  // the namespace once with:
+  //   wrangler kv namespace create NEXT_INC_CACHE_KV
+  // then paste the generated id below. Uncomment the binding to enable.
+  // --------------------------------------------------------------------
+  "kv_namespaces": [
+    { "binding": "NEXT_INC_CACHE_KV", "id": "d13ee83de7244fdda1788388e4b4928d" }
+  ],
+
+  // Observability — structured logs + tail in the dashboard.
+  "observability": {
+    "enabled": true
+  },
+
+  // Keep the Worker small; tree-shake unused code hard.
+  "minify": true
+}

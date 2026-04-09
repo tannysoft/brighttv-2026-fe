@@ -1,7 +1,8 @@
 // JSON-LD schema generators for SEO.
 // All schemas reference https://schema.org and are rendered as <script type="application/ld+json">.
+import { SITE_ORIGIN } from "./env";
 
-const SITE_URL = "https://www.brighttv.co.th";
+const SITE_URL = SITE_ORIGIN;
 const SITE_NAME = "BRIGHT TV";
 const LOGO_URL = `${SITE_URL}/logo.svg`;
 

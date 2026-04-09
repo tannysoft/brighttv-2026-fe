@@ -3,6 +3,7 @@ import { Noto_Sans_Thai } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { SITE_ORIGIN } from "@/lib/env";
 import { getGlobalStylesCss } from "@/lib/wp";
 import { organizationSchema, websiteSchema } from "@/lib/schema";
 
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
   },
   description:
     "ไบรท์ทีวี (Bright TV) สำนักข่าวออนไลน์ เกาะติดทุกสถานการณ์ ข่าวการเมือง สังคม เศรษฐกิจ บันเทิง ต่างประเทศ กีฬา และไลฟ์สไตล์ ครบจบในที่เดียว",
-  metadataBase: new URL("https://www.brighttv.co.th"),
+  metadataBase: new URL(SITE_ORIGIN),
   openGraph: { type: "website", siteName: "BRIGHT TV", locale: "th_TH" },
   icons: { icon: "/logo.svg" },
 };

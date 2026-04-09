@@ -2,13 +2,14 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getPosts } from "@/lib/wp";
+import { WP_API_ORIGIN } from "@/lib/env";
 import ArticleCard from "@/components/ArticleCard";
 import JsonLd from "@/components/JsonLd";
 import { breadcrumbSchema, collectionPageSchema } from "@/lib/schema";
 
 export const revalidate = 300;
 
-const WP_BASE = "https://www.brighttv.co.th/wp-json/wp/v2";
+const WP_BASE = `${WP_API_ORIGIN}/wp-json/wp/v2`;
 
 async function getTagBySlug(slug: string) {
   try {

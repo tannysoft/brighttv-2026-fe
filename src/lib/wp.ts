@@ -1,8 +1,21 @@
 // WordPress REST API client for brighttv.co.th.
 // This file holds ONLY type definitions and network fetchers. All pure
 // conversion/formatting helpers live in `@/lib/utils`.
-const WP_BASE = "https://www.brighttv.co.th/wp-json/wp/v2";
+import { SITE_ORIGIN, WP_API_ORIGIN } from "./env";
+
+const WP_BASE = `${WP_API_ORIGIN}/wp-json/wp/v2`;
 const REVALIDATE = 300; // 5 minutes ISR
+
+// iThemes Security on the WP side blocks requests that don't look like a
+// real browser (anything with an empty or bot-shaped User-Agent). Cloudflare
+// Workers' default fetch sends `undici/*` which gets flagged, so we force
+// a desktop browser UA on every upstream call.
+const WP_FETCH_HEADERS = {
+  Accept: "application/json",
+  "User-Agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+} as const;
 
 // ---------- types ----------
 
@@ -128,16 +141,22 @@ export type SidebarResponse = {
 // ---------- internal ----------
 
 async function wpFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
+  const url = `${WP_BASE}${path}`;
   try {
-    const url = `${WP_BASE}${path}`;
     const res = await fetch(url, {
       ...init,
       next: { revalidate: REVALIDATE },
-      headers: { Accept: "application/json", ...(init?.headers || {}) },
+      headers: { ...WP_FETCH_HEADERS, ...(init?.headers || {}) },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // eslint-disable-next-line no-console
+      console.error(`[wpFetch] ${res.status} ${res.statusText} ${url}`);
+      return null;
+    }
     return (await res.json()) as T;
-  } catch {
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[wpFetch] threw ${err instanceof Error ? err.message : err} ${url}`);
     return null;
   }
 }
@@ -216,8 +235,8 @@ export async function getLottoLatest(): Promise<LottoResult | null> {
 export async function getMostViewPosts(): Promise<SidebarPost[]> {
   try {
     const res = await fetch(
-      "https://www.brighttv.co.th/wp-json/nuxt/v1/sidebar?type=mostview",
-      { next: { revalidate: REVALIDATE }, headers: { Accept: "application/json" } },
+      `${WP_API_ORIGIN}/wp-json/nuxt/v1/sidebar?type=mostview`,
+      { next: { revalidate: REVALIDATE }, headers: WP_FETCH_HEADERS },
     );
     if (!res.ok) return [];
     const data = (await res.json()) as { mostview?: SidebarPost[] };
@@ -227,12 +246,54 @@ export async function getMostViewPosts(): Promise<SidebarPost[]> {
   }
 }
 
+// Top trending tags across recently-scanned posts. Backs the "แท็กยอดนิยม"
+// widget in the article page sidebar. Tag slugs come back percent-encoded
+// from the WP endpoint; we decode them once here so Link/href works with
+// plain Thai text.
+export type TopTag = {
+  term_id: number;
+  name: string;
+  slug: string;
+  count: number;
+};
+
+export async function getTopTags(
+  opts: { isHome?: boolean } = {},
+): Promise<TopTag[]> {
+  const url = opts.isHome
+    ? `${WP_API_ORIGIN}/wp-json/nuxt/v1/top-tags?is_home=true`
+    : `${WP_API_ORIGIN}/wp-json/nuxt/v1/top-tags`;
+  try {
+    const res = await fetch(url, {
+      next: { revalidate: REVALIDATE },
+      headers: WP_FETCH_HEADERS,
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { top_tags?: TopTag[] };
+    const tags = Array.isArray(data.top_tags) ? data.top_tags : [];
+    return tags.map((t) => ({
+      ...t,
+      slug: safeDecode(t.slug),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function safeDecode(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
 export async function getArticleSidebar(postId: number): Promise<SidebarResponse> {
   const empty: SidebarResponse = { related: [], latest: [], mostview: [] };
   try {
     const res = await fetch(
-      `https://www.brighttv.co.th/wp-json/nuxt/v1/sidebar?id=${postId}`,
-      { next: { revalidate: REVALIDATE }, headers: { Accept: "application/json" } },
+      `${WP_API_ORIGIN}/wp-json/nuxt/v1/sidebar?id=${postId}`,
+      { next: { revalidate: REVALIDATE }, headers: WP_FETCH_HEADERS },
     );
     if (!res.ok) return empty;
     const data = (await res.json()) as Partial<SidebarResponse>;
@@ -261,14 +322,13 @@ export async function getArticleSidebar(postId: number): Promise<SidebarResponse
 //     'callback' => fn() => ['css' => wp_get_global_stylesheet()],
 //   ]);
 const GLOBAL_STYLES_TTL = 21600; // 6h
-const SITE_ORIGIN = "https://www.brighttv.co.th";
 
 export async function getGlobalStylesCss(): Promise<string> {
   // 1. Preferred: dedicated REST endpoint that calls wp_get_global_stylesheet()
   try {
-    const res = await fetch(`${SITE_ORIGIN}/wp-json/bright/v1/global-styles`, {
+    const res = await fetch(`${WP_API_ORIGIN}/wp-json/bright/v1/global-styles`, {
       next: { revalidate: GLOBAL_STYLES_TTL },
-      headers: { Accept: "application/json" },
+      headers: WP_FETCH_HEADERS,
     });
     if (res.ok) {
       const data = (await res.json()) as { css?: string };
@@ -282,7 +342,7 @@ export async function getGlobalStylesCss(): Promise<string> {
   try {
     const res = await fetch(`${SITE_ORIGIN}/`, {
       next: { revalidate: GLOBAL_STYLES_TTL },
-      headers: { "User-Agent": "BrightTV-Headless/1.0" },
+      headers: WP_FETCH_HEADERS,
     });
     if (!res.ok) return "";
     const html = await res.text();

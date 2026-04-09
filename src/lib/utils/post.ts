@@ -120,9 +120,13 @@ export function sidebarPostToWPPost(s: SidebarPost): WPPost {
           media_details: {
             width: fullSize.width,
             height: fullSize.height,
+            // TS 5.x disallows type predicates on destructured params, so
+            // name the whole tuple and narrow via a normal guard instead.
             sizes: Object.fromEntries(
               Object.entries(sizes)
-                .filter(([, v]): v is SizeEntry => Boolean(v))
+                .filter(
+                  (entry): entry is [string, SizeEntry] => entry[1] != null,
+                )
                 .map(([k, v]) => [
                   k,
                   { source_url: v.src, width: v.width, height: v.height },
