@@ -37,6 +37,19 @@ function pickSlug(segments: string[] | undefined): string {
   return segments[segments.length - 1];
 }
 
+// Return `n` unique items picked at random from `arr` without mutating the
+// source. When `arr.length <= n` we just return a copy of everything so the
+// caller never gets fewer items than asked for when the source is small.
+function pickRandom<T>(arr: readonly T[], n: number): T[] {
+  if (arr.length <= n) return arr.slice();
+  const copy = arr.slice();
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy.slice(0, n);
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -171,7 +184,11 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
   const related = sidebar.related.slice(0, 4).map(sidebarPostToWPPost);
   const galleryRelated = sidebar.related.slice(0, 6).map(sidebarPostToWPPost);
   const mostview = sidebar.mostview.slice(0, 5).map(sidebarPostToWPPost);
-  const latest = sidebar.latest.slice(0, 4).map(sidebarPostToWPPost);
+  // Pick 4 random items out of the 10 "latest" from the sidebar so the
+  // bottom row of the article varies between ISR revalidations and doesn't
+  // show the same four posts forever. Shuffled server-side — the result is
+  // frozen into the cached HTML until `revalidate` expires.
+  const latest = pickRandom(sidebar.latest, 4).map(sidebarPostToWPPost);
 
   // Canonical path from WP's nuxtlink (e.g. /social-news/indictment-…)
   const articlePath = getPostPath(post);

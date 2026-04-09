@@ -92,6 +92,20 @@ export type WPCategory = {
   link: string;
 };
 
+export type WPUser = {
+  id: number;
+  name: string;
+  url: string;
+  description: string;
+  link: string;
+  slug: string;
+  avatar_urls?: Record<string, string>;
+  acf?: {
+    author_image?: string;
+    [key: string]: unknown;
+  };
+};
+
 export type WPTag = {
   id: number;
   count: number;
@@ -175,6 +189,7 @@ export async function getPosts(params: {
   perPage?: number;
   page?: number;
   categories?: number | number[];
+  author?: number | number[];
   exclude?: number[];
   search?: string;
   embed?: boolean;
@@ -188,11 +203,24 @@ export async function getPosts(params: {
       Array.isArray(params.categories) ? params.categories.join(",") : String(params.categories),
     );
   }
+  if (params.author) {
+    sp.set(
+      "author",
+      Array.isArray(params.author) ? params.author.join(",") : String(params.author),
+    );
+  }
   if (params.exclude?.length) sp.set("exclude", params.exclude.join(","));
   if (params.search) sp.set("search", params.search);
   if (params.embed !== false) sp.set("_embed", "1");
   const data = await wpFetch<WPPost[]>(`/posts?${sp.toString()}`);
   return data ?? [];
+}
+
+export async function getUserBySlug(slug: string): Promise<WPUser | null> {
+  const data = await wpFetch<WPUser[]>(
+    `/users?slug=${encodeURIComponent(slug)}`,
+  );
+  return data && data.length ? data[0] : null;
 }
 
 export async function getPostBySlug(slug: string): Promise<WPPost | null> {
