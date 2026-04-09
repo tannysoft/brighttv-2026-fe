@@ -87,6 +87,17 @@ export function getAuthorName(post: WPPost): string {
   return post._embedded?.author?.[0]?.name || "กองบรรณาธิการ";
 }
 
+// Absolute URL of the author's WP archive page, used for NewsArticle /
+// Person schema's author.url. Falls back to null when the embedded author
+// data doesn't include a link (e.g. when _embed wasn't requested).
+export function getAuthorUrl(post: WPPost): string | null {
+  const a = post._embedded?.author?.[0];
+  if (!a) return null;
+  if (a.link) return a.link;
+  if (a.slug) return `https://www.brighttv.co.th/author/${a.slug}`;
+  return null;
+}
+
 /**
  * Derive a site-relative path for a post.
  * Prefers the WordPress REST API's `nuxtlink` field (already site-relative).

@@ -6,6 +6,7 @@ import { getArticleSidebar, getPostBySlug } from "@/lib/wp";
 import { SITE_ORIGIN, WP_API_ORIGIN } from "@/lib/env";
 import {
   getAuthorName,
+  getAuthorUrl,
   getFeaturedImage,
   getPostPath,
   getPrimaryCategory,
@@ -175,14 +176,21 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
   // Canonical path from WP's nuxtlink (e.g. /social-news/indictment-…)
   const articlePath = getPostPath(post);
 
+  // Prefer the GMT timestamps from WP so we can append a strict `Z` suffix
+  // — Google's Rich Results validator flags naked site-local datetimes as
+  // "missing timezone". Fall back to the naked site times with a Thailand
+  // +07:00 offset when GMT isn't in the payload.
+  const datesAreGmt = Boolean(post.date_gmt);
   const articleSchema = newsArticleSchema({
     url: articlePath,
     headline: title,
     description: stripHtml(post.excerpt.rendered).slice(0, 200),
     imageUrl: img?.url,
-    datePublished: post.date,
-    dateModified: post.modified,
+    datePublished: post.date_gmt || post.date,
+    dateModified: post.modified_gmt || post.modified,
+    datesAreGmt,
     authorName: author,
+    authorUrl: getAuthorUrl(post) || undefined,
     categoryName: cat?.name,
   });
   const crumbSchema = breadcrumbSchema([

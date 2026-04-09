@@ -24,7 +24,9 @@ export type WPRendered = { rendered: string; protected?: boolean };
 export type WPPost = {
   id: number;
   date: string;
+  date_gmt?: string;
   modified: string;
+  modified_gmt?: string;
   slug: string;
   link: string;
   title: WPRendered;
@@ -57,7 +59,13 @@ export type WPPost = {
     nuxtlink?: string;
   }>;
   _embedded?: {
-    author?: Array<{ id: number; name: string; avatar_urls?: Record<string, string> }>;
+    author?: Array<{
+      id: number;
+      name: string;
+      slug?: string;
+      link?: string;
+      avatar_urls?: Record<string, string>;
+    }>;
     "wp:featuredmedia"?: Array<{
       id: number;
       source_url: string;
