@@ -69,9 +69,17 @@ export default function ArticleBody({ html }: { html: string }) {
   }, [html]);
 
   return (
+    // suppressHydrationWarning: WP article HTML is touched by 3rd-party SDKs
+    // (TikTok, Twitter, Instagram, Facebook) that transform blockquotes into
+    // iframes during the browser's initial parse — often BEFORE React
+    // hydrates. That leaves the live DOM different from the server-rendered
+    // string, so React would otherwise flag every such article. The content
+    // isn't interactive from React's perspective (it's dangerouslySetInnerHTML)
+    // so dropping the hydration check here is safe.
     <div
       ref={ref}
       className="article-body"
+      suppressHydrationWarning
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

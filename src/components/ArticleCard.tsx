@@ -87,7 +87,7 @@ export default function ArticleCard({
 
   if (variant === "compact") {
     return (
-      <Link href={href} className="group flex gap-3 items-stretch">
+      <Link href={href} className="group flex gap-3 items-center">
         <div className="relative w-[140px] sm:w-[160px] aspect-[16/9] shrink-0 overflow-hidden rounded-lg bg-[var(--bt-navy-50)]">
           <Image
             src={img?.url || PLACEHOLDER}

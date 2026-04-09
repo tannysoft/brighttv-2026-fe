@@ -251,7 +251,7 @@ export async function getMostViewPosts(): Promise<SidebarPost[]> {
 // from the WP endpoint; we decode them once here so Link/href works with
 // plain Thai text.
 export type TopTag = {
-  term_id: number;
+  id: number;
   name: string;
   slug: string;
   count: number;

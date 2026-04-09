@@ -11,6 +11,21 @@ export const DEFAULT_FEATURED_IMAGE = {
   height: 630,
 };
 
+// Size-key priority per requested logical size. When "full" is asked for we
+// walk from the biggest WP intermediate (2048²) down to "medium_large" so
+// the hero renders crisply on retina displays. For every smaller logical
+// size we still try slightly larger fallbacks below the exact match so we
+// never end up serving a tiny thumbnail when a better one exists.
+const SIZE_FALLBACKS: Record<
+  "thumbnail" | "medium" | "large" | "full",
+  readonly string[]
+> = {
+  full: ["2048x2048", "1536x1536", "full", "large", "medium_large"],
+  large: ["large", "medium_large", "1536x1536", "full"],
+  medium: ["medium_large", "medium", "large"],
+  thumbnail: ["thumbnail", "medium"],
+};
+
 // Resolve the best URL for a post's featured image at the requested size.
 // Falls back to the default brand image when the post is missing media.
 export function getFeaturedImage(
@@ -24,15 +39,26 @@ export function getFeaturedImage(
       alt: stripHtml(post.title.rendered),
     };
   }
-  const sized = media.media_details?.sizes?.[size]?.source_url;
+
+  const sizes = media.media_details?.sizes;
+  let picked: { source_url: string; width?: number; height?: number } | undefined;
+  for (const key of SIZE_FALLBACKS[size]) {
+    const s = sizes?.[key];
+    if (s?.source_url) {
+      picked = s;
+      break;
+    }
+  }
+
   return {
-    url: sized || media.source_url || DEFAULT_FEATURED_IMAGE.url,
+    url:
+      picked?.source_url || media.source_url || DEFAULT_FEATURED_IMAGE.url,
     width:
-      media.media_details?.sizes?.[size]?.width ||
+      picked?.width ||
       media.media_details?.width ||
       DEFAULT_FEATURED_IMAGE.width,
     height:
-      media.media_details?.sizes?.[size]?.height ||
+      picked?.height ||
       media.media_details?.height ||
       DEFAULT_FEATURED_IMAGE.height,
     alt: media.alt_text || stripHtml(post.title.rendered),

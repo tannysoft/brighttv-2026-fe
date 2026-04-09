@@ -15,7 +15,7 @@ export default async function TopKeywordsWidget() {
       <div className="flex flex-wrap gap-2">
         {tags.map((t) => (
           <Link
-            key={t.term_id}
+            key={t.id}
             href={`/tag/${t.slug}`}
             title={`${t.name} · ${t.count} ข่าว`}
             className="inline-flex items-center gap-1 h-8 px-3 rounded-full bg-[var(--bt-bg)] border border-[var(--bt-line)] text-[12px] font-semibold text-[var(--bt-navy)] hover:bg-[var(--bt-navy)] hover:!text-white hover:border-[var(--bt-navy)] transition-colors"

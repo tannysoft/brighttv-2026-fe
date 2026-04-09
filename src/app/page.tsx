@@ -506,7 +506,7 @@ async function PopularTags() {
     const k = t.slug.toLowerCase();
     if (seen.has(k)) continue;
     seen.add(k);
-    merged.push({ key: `top-${t.term_id}`, name: t.name, slug: t.slug });
+    merged.push({ key: `top-${t.id}`, name: t.name, slug: t.slug });
   }
   for (const t of allTime) {
     const k = t.slug.toLowerCase();

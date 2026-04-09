@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getCategoryBySlug, getPosts } from "@/lib/wp";
+import { stripHtml } from "@/lib/utils";
 import { findNavBySlug } from "@/lib/categories";
 import ArticleCard from "@/components/ArticleCard";
 import HeroSideGrid from "@/components/HeroSideGrid";
@@ -40,21 +41,38 @@ export default async function CategoryPage({
   const page = Math.max(1, Number(sp.page || "1"));
 
   const nav = findNavBySlug(slug);
-  let categoryId = nav?.id;
-  let categoryName = nav?.name;
+  // Always fetch the WP category so we can use its description. When we
+  // already know the id from the local nav map we can do it in parallel
+  // with the posts fetch; otherwise we need the id first, then the posts.
+  const perPage = page === 1 ? 17 : 12;
+  let categoryId: number | undefined = nav?.id;
+  let categoryName: string | undefined = nav?.name;
+  let wpDescription = "";
+  let posts;
 
-  if (!categoryId) {
-    const cat = await getCategoryBySlug(slug);
-    if (!cat) notFound();
-    categoryId = cat.id;
-    categoryName = cat.name;
+  if (nav) {
+    const [wpCat, fetched] = await Promise.all([
+      getCategoryBySlug(slug),
+      getPosts({ categories: nav.id, perPage, page }),
+    ]);
+    if (wpCat?.description) wpDescription = wpCat.description;
+    posts = fetched;
+  } else {
+    const wpCat = await getCategoryBySlug(slug);
+    if (!wpCat) notFound();
+    categoryId = wpCat.id;
+    categoryName = wpCat.name;
+    wpDescription = wpCat.description ?? "";
+    posts = await getPosts({ categories: wpCat.id, perPage, page });
   }
 
-  // page 1: 1 hero + 4 side + 12 grid = 17 total
-  // page 2+: 12 grid only
-  const perPage = page === 1 ? 17 : 12;
-  const posts = await getPosts({ categories: categoryId, perPage, page });
   if (!posts.length && page === 1) notFound();
+
+  // WP category description can contain HTML — strip tags before rendering.
+  // Fall back to the generic template when the category has no description.
+  const description =
+    stripHtml(wpDescription) ||
+    `รวมข่าว${categoryName}ล่าสุด อัปเดตทุกความเคลื่อนไหว`;
 
   const [lead, ...rest] = posts;
   const hasNext = posts.length === perPage;
@@ -66,7 +84,7 @@ export default async function CategoryPage({
           collectionPageSchema({
             url: `/category/${slug}`,
             name: categoryName || "หมวดหมู่",
-            description: `รวมข่าว${categoryName}ล่าสุด`,
+            description,
           }),
           breadcrumbSchema([
             { name: "หน้าแรก", url: "/" },
@@ -74,17 +92,17 @@ export default async function CategoryPage({
           ]),
         ]}
       />
-      <nav className="text-xs text-[var(--bt-muted)] mb-4 flex items-center gap-2">
-        <Link href="/" className="hover:text-[var(--bt-red)]">หน้าแรก</Link>
-        <span>›</span>
-        <span className="text-[var(--bt-navy)] font-semibold">{categoryName}</span>
+      <nav className="text-xs text-[var(--bt-muted)] mb-4 flex items-center gap-2 whitespace-nowrap overflow-hidden">
+        <Link href="/" className="shrink-0 hover:text-[var(--bt-red)]">หน้าแรก</Link>
+        <span className="shrink-0">›</span>
+        <span className="text-[var(--bt-navy)] font-semibold truncate min-w-0">{categoryName}</span>
       </nav>
 
       <h1 className="text-3xl sm:text-4xl font-extrabold text-[var(--bt-navy)] mb-2">
         {categoryName}
       </h1>
       <p className="text-sm text-[var(--bt-muted)] mb-8">
-        รวมข่าว{categoryName}ล่าสุด อัปเดตทุกความเคลื่อนไหว
+        {description}
       </p>
 
       {page === 1 && lead && (

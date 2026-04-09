@@ -59,17 +59,95 @@ export async function generateMetadata({
   };
 }
 
-// Light pre-processing of WP HTML before it's handed to ArticleBody. We
-// preserve <script>, <style>, <iframe>, and embed markup; ArticleBody re-runs
-// any inline scripts client-side so YouTube/oEmbed/social SDK embeds work.
+// Light pre-processing of WP HTML before it's handed to ArticleBody.
+//
+// WordPress's REST API returns `content.rendered` for Gutenberg oEmbed blocks
+// as a wrapper `<figure class="wp-block-embed-<provider>">` containing just
+// the raw URL — the actual conversion to an iframe/blockquote only happens
+// on the WP front-end via render filters. Here we replicate that conversion
+// for the providers Bright uses (TikTok, YouTube, Twitter/X, Instagram,
+// Facebook) so ArticleBody can re-execute the provider SDKs and light them
+// up client-side.
 function processContent(html: string): string {
-  return html.replace(/loading="lazy"/g, 'loading="lazy" decoding="async"');
+  return convertOEmbedBlocks(html).replace(
+    /loading="lazy"/g,
+    'loading="lazy" decoding="async"',
+  );
+}
+
+// Replace `<figure class="wp-block-embed-*"><div class="wp-block-embed__wrapper">URL</div></figure>`
+// blocks with each provider's real embed markup. Leaves unknown providers
+// alone (so a plain URL is still rendered, just not converted).
+function convertOEmbedBlocks(html: string): string {
+  const wrapper =
+    /<figure[^>]*wp-block-embed[^>]*is-provider-([a-z-]+)[^>]*>\s*<div[^>]*wp-block-embed__wrapper[^>]*>\s*([\s\S]*?)\s*<\/div>\s*<\/figure>/gi;
+
+  return html.replace(wrapper, (match, provider: string, body: string) => {
+    // The body usually has whitespace around a single URL. Some variants
+    // also wrap the URL in an <a> tag. Extract the first URL we find.
+    const urlMatch = body.match(/https?:\/\/[^\s"<]+/);
+    if (!urlMatch) return match;
+    const url = urlMatch[0].replace(/&amp;/g, "&");
+
+    switch (provider) {
+      case "tiktok": {
+        const idMatch = url.match(/\/video\/(\d+)/);
+        if (!idMatch) return match;
+        const videoId = idMatch[1];
+        const cleanUrl = url.split("?")[0];
+        return (
+          `<blockquote class="tiktok-embed" cite="${cleanUrl}" data-video-id="${videoId}" ` +
+          `style="max-width:605px;min-width:325px;margin:1.5em auto;">` +
+          `<section></section></blockquote>` +
+          `<script async src="https://www.tiktok.com/embed.js"></script>`
+        );
+      }
+      case "youtube": {
+        const idMatch = url.match(
+          /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/))([\w-]{11})/,
+        );
+        if (!idMatch) return match;
+        const videoId = idMatch[1];
+        return (
+          `<figure class="wp-block-embed is-type-video is-provider-youtube my-6">` +
+          `<div class="relative w-full aspect-[16/9] rounded-xl overflow-hidden bg-black">` +
+          `<iframe src="https://www.youtube.com/embed/${videoId}" title="YouTube video" ` +
+          `loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" ` +
+          `referrerpolicy="strict-origin-when-cross-origin" allowfullscreen ` +
+          `class="absolute inset-0 w-full h-full"></iframe></div></figure>`
+        );
+      }
+      case "twitter":
+      case "x": {
+        return (
+          `<blockquote class="twitter-tweet"><a href="${url}"></a></blockquote>` +
+          `<script async src="https://platform.twitter.com/widgets.js"></script>`
+        );
+      }
+      case "instagram": {
+        return (
+          `<blockquote class="instagram-media" data-instgrm-permalink="${url}" data-instgrm-version="14" ` +
+          `style="background:#FFF;border:0;border-radius:3px;box-shadow:0 0 1px 0 rgba(0,0,0,0.5),0 1px 10px 0 rgba(0,0,0,0.15);margin:1.5em auto;max-width:540px;min-width:326px;padding:0;width:calc(100% - 2px);"></blockquote>` +
+          `<script async src="https://www.instagram.com/embed.js"></script>`
+        );
+      }
+      case "facebook": {
+        return (
+          `<div class="fb-post" data-href="${url}" data-width="550" data-show-text="true"></div>` +
+          `<script async crossorigin="anonymous" ` +
+          `src="https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v18.0"></script>`
+        );
+      }
+      default:
+        return match;
+    }
+  });
 }
 
 // If the article body uses Facebook embeds, the FB SDK needs this anchor
 // element somewhere in the document to mount its rendered iframes.
 function needsFbRoot(rawHtml: string): boolean {
-  return /fb-(post|video|page)|facebook\.com\/plugins\/|connect\.facebook\.net/i.test(rawHtml);
+  return /fb-(post|video|page)|facebook\.com\/plugins\/|connect\.facebook\.net|is-provider-facebook/i.test(rawHtml);
 }
 
 export default async function ArticlePage({ params }: { params: Promise<Params> }) {
@@ -116,18 +194,18 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
   return (
     <article className="mx-auto max-w-[1240px] px-4 py-8">
       <JsonLd data={[articleSchema, crumbSchema]} />
-      <nav className="text-xs text-[var(--bt-muted)] mb-4 flex items-center gap-2 flex-wrap">
-        <Link href="/" className="hover:text-[var(--bt-red)]">หน้าแรก</Link>
-        <span>›</span>
+      <nav className="text-xs text-[var(--bt-muted)] mb-4 flex items-center gap-2 whitespace-nowrap overflow-hidden">
+        <Link href="/" className="shrink-0 hover:text-[var(--bt-red)]">หน้าแรก</Link>
+        <span className="shrink-0">›</span>
         {cat && (
           <>
-            <Link href={`/category/${cat.slug}`} className="hover:text-[var(--bt-red)]">
+            <Link href={`/category/${cat.slug}`} className="shrink-0 hover:text-[var(--bt-red)]">
               {cat.name}
             </Link>
-            <span>›</span>
+            <span className="shrink-0">›</span>
           </>
         )}
-        <span className="text-[var(--bt-navy)] font-semibold clamp-2">{title}</span>
+        <span className="text-[var(--bt-navy)] font-semibold truncate min-w-0">{title}</span>
       </nav>
 
       <div className="grid lg:grid-cols-3 gap-10">
