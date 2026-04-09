@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   WPPost,
+  formatViews,
   getFeaturedImage,
   getPostPath,
   getPrimaryCategory,
@@ -31,6 +32,7 @@ export default function ArticleCard({
   const excerpt = stripHtml(post.excerpt.rendered);
   const href = getPostPath(post);
   const showPlay = hasVideo(post);
+  const viewsLabel = formatViews(post.views);
 
   if (variant === "hero") {
     return (
@@ -97,27 +99,42 @@ export default function ArticleCard({
           {showPlay && <PlayBadge size="sm" />}
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-center">
-          {cat && (
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--bt-red)] leading-none">
-              {cat.name}
-            </span>
+          {(cat || viewsLabel) && (
+            <div className="flex items-center justify-between gap-2">
+              {cat ? (
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--bt-red)] leading-none">
+                  {cat.name}
+                </span>
+              ) : (
+                <span />
+              )}
+              {viewsLabel && <ViewsBadge label={viewsLabel} />}
+            </div>
           )}
           <h3 className="mt-1 text-[13px] sm:text-[14px] font-bold leading-snug text-[var(--bt-text)] clamp-2 group-hover:text-[var(--bt-red)] transition-colors">
             {title}
           </h3>
-          <p className="mt-1 text-[10px] text-[var(--bt-muted)] leading-none">{timeAgoTH(post.date)}</p>
+          {!viewsLabel && (
+            <p className="mt-1 text-[10px] text-[var(--bt-muted)] leading-none">
+              {timeAgoTH(post.date)}
+            </p>
+          )}
         </div>
       </Link>
     );
   }
 
   if (variant === "small") {
+    // Views for the mostview/popular sidebars are rendered by the caller next
+    // to the rank number, so this variant stays minimal: title + date.
     return (
       <Link href={href} className="group block">
         <h4 className="text-[14px] font-semibold leading-snug text-[var(--bt-text)] clamp-2 group-hover:text-[var(--bt-red)] transition-colors">
           {title}
         </h4>
-        <p className="mt-1 text-[11px] text-[var(--bt-muted)]">{timeAgoTH(post.date)}</p>
+        <p className="mt-1 text-[11px] text-[var(--bt-muted)]">
+          {timeAgoTH(post.date)}
+        </p>
       </Link>
     );
   }
@@ -147,8 +164,34 @@ export default function ArticleCard({
         {excerpt && (
           <p className="hidden sm:block mt-1.5 text-sm text-[var(--bt-muted)] clamp-2">{excerpt}</p>
         )}
-        <p className="mt-2 text-[12px] text-[var(--bt-muted)]">{timeAgoTH(post.date)}</p>
+        <div className="mt-2 flex items-center gap-2 text-[12px] text-[var(--bt-muted)]">
+          {viewsLabel ? (
+            <ViewsBadge label={viewsLabel} />
+          ) : (
+            <span>{timeAgoTH(post.date)}</span>
+          )}
+        </div>
       </div>
     </Link>
+  );
+}
+
+// Red-tinted pill used by the mostview / popular sidebars. Flame icon +
+// full thousands-separated count so the number reads as weighty trending
+// evidence rather than a fine-print footnote next to the date.
+function ViewsBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-[var(--bt-red)]/10 text-[var(--bt-red)] text-[10px] font-bold leading-none">
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        aria-hidden
+      >
+        <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/>
+      </svg>
+      <span className="tabular-nums">{label}</span>
+    </span>
   );
 }

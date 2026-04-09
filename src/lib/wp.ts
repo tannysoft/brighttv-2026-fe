@@ -18,6 +18,17 @@ export type WPPost = {
   categories: number[];
   tags: number[];
   nuxtlink?: string;
+  // Optional view count provided by Bright's custom sidebar endpoint.
+  // Only populated on posts that came through sidebarPostToWPPost().
+  views?: string | number;
+  // Top-level image gallery exposed by the WP REST API (not inside acf).
+  gallery_images?: Array<{
+    id: number;
+    alt: string;
+    sizes: Partial<
+      Record<string, { ID?: number; width: number; height: number; src: string }>
+    >;
+  }>;
   acf?: {
     youtube_id?: string | number | null;
     [key: string]: unknown;
@@ -141,21 +152,228 @@ export async function getLottoLatest(): Promise<LottoResult | null> {
   }
 }
 
+// ---------- Article sidebar (custom Bright endpoint) ----------
+// /wp-json/nuxt/v1/sidebar?id={postId} returns { related, latest, mostview }
+// — flat post arrays in a Bright-specific shape (different from /wp/v2/posts).
+type SidebarImageSize = { ID?: number; width: number; height: number; src: string };
+type SidebarCategory = {
+  id: number;
+  name: string;
+  slug: string;
+  link?: string;
+  nuxtlink?: string;
+};
+export type SidebarPost = {
+  id: number;
+  modified: string;
+  title: WPRendered;
+  excerpt: WPRendered;
+  author: string;
+  featured_image?: {
+    alt?: string;
+    sizes?: Partial<Record<string, SidebarImageSize>>;
+  };
+  primary_category?: SidebarCategory;
+  nuxtlink?: string;
+  views?: string | number;
+};
+
+export type SidebarResponse = {
+  related: SidebarPost[];
+  latest: SidebarPost[];
+  mostview: SidebarPost[];
+};
+
+// Fetch only the most-viewed posts from the same Bright sidebar endpoint.
+// Omit `id` and pass `type=mostview` to get a site-wide trending list.
+export async function getMostViewPosts(): Promise<SidebarPost[]> {
+  try {
+    const res = await fetch(
+      "https://www.brighttv.co.th/wp-json/nuxt/v1/sidebar?type=mostview",
+      { next: { revalidate: REVALIDATE }, headers: { Accept: "application/json" } },
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as { mostview?: SidebarPost[] };
+    return Array.isArray(data.mostview) ? data.mostview : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getArticleSidebar(postId: number): Promise<SidebarResponse> {
+  const empty: SidebarResponse = { related: [], latest: [], mostview: [] };
+  try {
+    const res = await fetch(
+      `https://www.brighttv.co.th/wp-json/nuxt/v1/sidebar?id=${postId}`,
+      { next: { revalidate: REVALIDATE }, headers: { Accept: "application/json" } },
+    );
+    if (!res.ok) return empty;
+    const data = (await res.json()) as Partial<SidebarResponse>;
+    return {
+      related: Array.isArray(data.related) ? data.related : [],
+      latest: Array.isArray(data.latest) ? data.latest : [],
+      mostview: Array.isArray(data.mostview) ? data.mostview : [],
+    };
+  } catch {
+    return empty;
+  }
+}
+
+// Adapt a SidebarPost into a WPPost-shaped object so it can be passed straight
+// into ArticleCard / other components without a separate renderer. Fields the
+// sidebar API doesn't return (categories, primary_category, full author info)
+// are filled with safe defaults — ArticleCard already guards on `cat &&` and
+// `hasVideo()` returning false on absent acf, so they degrade gracefully.
+export function sidebarPostToWPPost(s: SidebarPost): WPPost {
+  const sizes = s.featured_image?.sizes ?? {};
+  const pickSize = (key: string): SidebarImageSize | undefined => sizes[key];
+  const fullSize = pickSize("full") ?? pickSize("large") ?? pickSize("medium_large");
+  const featuredMedia = fullSize
+    ? [
+        {
+          id: fullSize.ID ?? 0,
+          source_url: fullSize.src,
+          alt_text: s.featured_image?.alt ?? "",
+          media_details: {
+            width: fullSize.width,
+            height: fullSize.height,
+            sizes: Object.fromEntries(
+              Object.entries(sizes)
+                .filter(([, v]): v is SidebarImageSize => Boolean(v))
+                .map(([k, v]) => [k, { source_url: v.src, width: v.width, height: v.height }]),
+            ),
+          },
+        },
+      ]
+    : undefined;
+
+  // WPPost.primary_category uses `nicename`; sidebar API uses `slug`. Remap.
+  const primary_category = s.primary_category
+    ? [
+        {
+          id: s.primary_category.id,
+          name: s.primary_category.name,
+          nicename: s.primary_category.slug,
+          nuxtlink: s.primary_category.nuxtlink,
+        },
+      ]
+    : undefined;
+
+  return {
+    id: s.id,
+    date: s.modified,
+    modified: s.modified,
+    slug: "",
+    link: "",
+    title: s.title,
+    excerpt: s.excerpt,
+    content: { rendered: "" },
+    author: 0,
+    featured_media: featuredMedia?.[0]?.id ?? 0,
+    categories: s.primary_category ? [s.primary_category.id] : [],
+    tags: [],
+    nuxtlink: s.nuxtlink,
+    views: s.views,
+    primary_category,
+    _embedded: {
+      author: s.author ? [{ id: 0, name: s.author }] : undefined,
+      "wp:featuredmedia": featuredMedia,
+    },
+  };
+}
+
+// Format a raw view count (string|number) with thousands separators.
+// Returns "" when the value is missing, zero, or not a finite number.
+export function formatViews(views: string | number | undefined): string {
+  if (views == null) return "";
+  const n = typeof views === "number" ? views : parseInt(views, 10);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  return n.toLocaleString("en-US");
+}
+
 export async function getPopularTags(perPage = 20): Promise<WPTag[]> {
   return (
     (await wpFetch<WPTag[]>(`/tags?orderby=count&order=desc&per_page=${perPage}`)) ?? []
   );
 }
 
+// WordPress's `<style id="global-styles-inline-css">` block is built from
+// theme.json and defines the `--wp--preset--*` CSS variables + base block
+// styles that any Gutenberg `post.content.rendered` markup depends on. We
+// fetch it from a small custom REST endpoint (preferred), and fall back to
+// scraping the home page HTML if the endpoint is not deployed yet.
+//
+// WP-side endpoint (mu-plugin):
+//   register_rest_route('bright/v1', '/global-styles', [
+//     'methods'  => 'GET',
+//     'permission_callback' => '__return_true',
+//     'callback' => fn() => ['css' => wp_get_global_stylesheet()],
+//   ]);
+const GLOBAL_STYLES_TTL = 21600; // 6h
+const SITE_ORIGIN = "https://www.brighttv.co.th";
+
+export async function getGlobalStylesCss(): Promise<string> {
+  // 1. Preferred: dedicated REST endpoint that calls wp_get_global_stylesheet()
+  try {
+    const res = await fetch(`${SITE_ORIGIN}/wp-json/bright/v1/global-styles`, {
+      next: { revalidate: GLOBAL_STYLES_TTL },
+      headers: { Accept: "application/json" },
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { css?: string };
+      if (typeof data.css === "string" && data.css.length > 0) return data.css;
+    }
+  } catch {
+    // fall through to scrape
+  }
+
+  // 2. Fallback: scrape the home page HTML and pull out the inline block.
+  try {
+    const res = await fetch(`${SITE_ORIGIN}/`, {
+      next: { revalidate: GLOBAL_STYLES_TTL },
+      headers: { "User-Agent": "BrightTV-Headless/1.0" },
+    });
+    if (!res.ok) return "";
+    const html = await res.text();
+    const m = html.match(
+      /<style[^>]*id=["']global-styles-inline-css["'][^>]*>([\s\S]*?)<\/style>/i,
+    );
+    return m ? m[1] : "";
+  } catch {
+    return "";
+  }
+}
+
 // ---------- helpers ----------
-export function getFeaturedImage(post: WPPost, size: "thumbnail" | "medium" | "large" | "full" = "large") {
+// Brand-safe fallback served when a post has no featured image at all.
+export const DEFAULT_FEATURED_IMAGE = {
+  url: "https://cdn.brighttv.co.th/wp-content/uploads/2017/07/04102155/brighttv-default.webp",
+  width: 1200,
+  height: 630,
+};
+
+export function getFeaturedImage(
+  post: WPPost,
+  size: "thumbnail" | "medium" | "large" | "full" = "large",
+) {
   const media = post._embedded?.["wp:featuredmedia"]?.[0];
-  if (!media) return null;
+  if (!media) {
+    return {
+      ...DEFAULT_FEATURED_IMAGE,
+      alt: stripHtml(post.title.rendered),
+    };
+  }
   const sized = media.media_details?.sizes?.[size]?.source_url;
   return {
-    url: sized || media.source_url,
-    width: media.media_details?.sizes?.[size]?.width || media.media_details?.width || 1200,
-    height: media.media_details?.sizes?.[size]?.height || media.media_details?.height || 800,
+    url: sized || media.source_url || DEFAULT_FEATURED_IMAGE.url,
+    width:
+      media.media_details?.sizes?.[size]?.width ||
+      media.media_details?.width ||
+      DEFAULT_FEATURED_IMAGE.width,
+    height:
+      media.media_details?.sizes?.[size]?.height ||
+      media.media_details?.height ||
+      DEFAULT_FEATURED_IMAGE.height,
     alt: media.alt_text || stripHtml(post.title.rendered),
   };
 }
@@ -253,9 +471,14 @@ export function thaiDate(iso: string, opts: { withTime?: boolean; short?: boolea
   if (!opts.withTime) return base;
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${base} ${hh}:${mm} น.`;
+  // Middle-dot separator (U+00B7) reads faster than a plain space between
+  // the date and time segments on card meta rows.
+  return `${base} · ${hh}:${mm} น.`;
 }
 
+// Relative timestamp for cards. Only within the last 8 hours we show a
+// "X ชั่วโมง/นาทีที่แล้ว" label — beyond that the absolute short Thai date
+// with time is more informative than an increasingly vague "3 days ago".
 export function timeAgoTH(iso: string) {
   const d = new Date(iso).getTime();
   const diff = Math.max(0, Date.now() - d);
@@ -264,8 +487,6 @@ export function timeAgoTH(iso: string) {
   const min = Math.floor(sec / 60);
   if (min < 60) return `${min} นาทีที่แล้ว`;
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} ชั่วโมงที่แล้ว`;
-  const day = Math.floor(hr / 24);
-  if (day < 7) return `${day} วันที่แล้ว`;
-  return thaiDate(iso, { short: true });
+  if (hr < 8) return `${hr} ชั่วโมงที่แล้ว`;
+  return thaiDate(iso, { short: true, withTime: true });
 }

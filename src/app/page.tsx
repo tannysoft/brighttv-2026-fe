@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { getPosts, getPopularTags, getLottoLatest, getPostPath, hasVideo, stripHtml } from "@/lib/wp";
+import { DEFAULT_FEATURED_IMAGE, getMostViewPosts, getPosts, getPopularTags, getLottoLatest, getPostPath, hasVideo, sidebarPostToWPPost, stripHtml } from "@/lib/wp";
 import ArticleCard from "@/components/ArticleCard";
 import PlayBadge from "@/components/PlayBadge";
+import RankedItem from "@/components/RankedItem";
 import SectionTitle from "@/components/SectionTitle";
 import CategorySection from "@/components/CategorySection";
 import CategoryColumnSection from "@/components/CategoryColumnSection";
@@ -120,18 +121,15 @@ async function CrimeFullWidth() {
 }
 
 async function PopularSidebar() {
-  const posts = await getPosts({ perPage: 5 });
+  const raw = await getMostViewPosts();
+  const posts = raw.slice(0, 5).map(sidebarPostToWPPost);
+  if (!posts.length) return null;
   return (
     <section>
       <SectionTitle title="กำลังเป็นที่สนใจ" accent="red" />
-      <ol className="space-y-4">
+      <ol className="space-y-5">
         {posts.map((p, i) => (
-          <li key={p.id} className="flex gap-3 items-start">
-            <span className="text-3xl font-extrabold leading-none text-[var(--bt-red)] w-8 shrink-0 tabular-nums">
-              {i + 1}
-            </span>
-            <ArticleCard post={p} variant="small" />
-          </li>
+          <RankedItem key={p.id} post={p} rank={i + 1} />
         ))}
       </ol>
     </section>
@@ -187,7 +185,7 @@ async function HoroscopeLottoBlock() {
           <Link href={getPostPath(horo[0])} className="group block mb-5">
             <div className="relative aspect-[16/9] rounded-xl overflow-hidden bg-white/10">
               {(() => {
-                const img = horo[0]._embedded?.["wp:featuredmedia"]?.[0]?.source_url;
+                const img = horo[0]._embedded?.["wp:featuredmedia"]?.[0]?.source_url ?? DEFAULT_FEATURED_IMAGE.url;
                 return img ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -206,7 +204,7 @@ async function HoroscopeLottoBlock() {
         )}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-white/15 pt-5">
           {horo.slice(1, 4).map((p) => {
-            const img = p._embedded?.["wp:featuredmedia"]?.[0]?.source_url;
+            const img = p._embedded?.["wp:featuredmedia"]?.[0]?.source_url ?? DEFAULT_FEATURED_IMAGE.url;
             return (
               <Link key={p.id} href={getPostPath(p)} className="group block">
                 <div className="relative aspect-[16/9] overflow-hidden rounded-lg bg-white/10">
@@ -322,7 +320,7 @@ async function HoroscopeLottoBlock() {
             </p>
             <ul className="space-y-3 flex-1">
               {lottoPosts.slice(0, 3).map((p) => {
-                const img = p._embedded?.["wp:featuredmedia"]?.[0]?.source_url;
+                const img = p._embedded?.["wp:featuredmedia"]?.[0]?.source_url ?? DEFAULT_FEATURED_IMAGE.url;
                 return (
                   <li key={p.id}>
                     <Link
@@ -404,7 +402,7 @@ async function VideoSection() {
             <Link href={getPostPath(lead)} className="group block lg:col-span-7 lg:h-full">
               <div className="relative aspect-[16/9] lg:aspect-auto lg:h-full rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10">
                 {(() => {
-                  const img = lead._embedded?.["wp:featuredmedia"]?.[0]?.source_url;
+                  const img = lead._embedded?.["wp:featuredmedia"]?.[0]?.source_url ?? DEFAULT_FEATURED_IMAGE.url;
                   return img ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -443,7 +441,7 @@ async function VideoSection() {
           {/* Side video list */}
           <div className="flex flex-col gap-3 lg:col-span-5">
             {rest.slice(0, 4).map((p) => {
-              const img = p._embedded?.["wp:featuredmedia"]?.[0]?.source_url;
+              const img = p._embedded?.["wp:featuredmedia"]?.[0]?.source_url ?? DEFAULT_FEATURED_IMAGE.url;
               return (
                 <Link
                   key={p.id}

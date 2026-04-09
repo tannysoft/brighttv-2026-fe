@@ -3,6 +3,7 @@ import { Noto_Sans_Thai } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { getGlobalStylesCss } from "@/lib/wp";
 import { organizationSchema, websiteSchema } from "@/lib/schema";
 
 const notoThai = Noto_Sans_Thai({
@@ -26,9 +27,13 @@ export const metadata: Metadata = {
 
 const siteSchemas = [organizationSchema(), websiteSchema()];
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // theme.json-derived CSS variables and base block styles. Same site-wide,
+  // long ISR cache, fetched once per request via Next.js fetch dedupe.
+  const globalStylesCss = await getGlobalStylesCss();
+
   return (
     <html lang="th" className={`${notoThai.variable} h-full antialiased`}>
       <head>
@@ -42,6 +47,13 @@ export default function RootLayout({
             dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
           />
         ))}
+        {globalStylesCss && (
+          <style
+            id="global-styles-inline-css"
+            // eslint-disable-next-line react/no-danger
+            dangerouslySetInnerHTML={{ __html: globalStylesCss }}
+          />
+        )}
       </head>
       <body className="min-h-full flex flex-col bg-white">
         <Header />

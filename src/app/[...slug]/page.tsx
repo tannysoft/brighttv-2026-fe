@@ -1,23 +1,26 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import Script from "next/script";
 import type { Metadata } from "next";
 import {
+  getArticleSidebar,
   getPostBySlug,
-  getPosts,
   getFeaturedImage,
   getPostPath,
   getPrimaryCategory,
   getAuthorName,
   getYoutubeId,
+  sidebarPostToWPPost,
   stripHtml,
   thaiDate,
 } from "@/lib/wp";
+import ArticleBody from "@/components/ArticleBody";
 import ArticleCard from "@/components/ArticleCard";
+import ArticleGallery from "@/components/ArticleGallery";
 import SectionTitle from "@/components/SectionTitle";
 import JsonLd from "@/components/JsonLd";
-import SocialEmbedReprocess from "@/components/SocialEmbedReprocess";
+import RankedItem from "@/components/RankedItem";
+import StickyBottomAside from "@/components/StickyBottomAside";
 import { breadcrumbSchema, newsArticleSchema } from "@/lib/schema";
 
 export const revalidate = 600;
@@ -54,37 +57,18 @@ export async function generateMetadata({
   };
 }
 
-// Sanitise WP HTML for safe injection. Inline <script>/<style> are dropped —
-// we re-add the official SDK for any third-party embed we detect via <Script>.
-// Embed markup itself (blockquotes, iframes) is preserved.
+// Light pre-processing of WP HTML before it's handed to ArticleBody. We
+// preserve <script>, <style>, <iframe>, and embed markup; ArticleBody re-runs
+// any inline scripts client-side so YouTube/oEmbed/social SDK embeds work.
 function processContent(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/loading="lazy"/g, 'loading="lazy" decoding="async"');
+  return html.replace(/loading="lazy"/g, 'loading="lazy" decoding="async"');
 }
 
-type EmbedProvider = "twitter" | "instagram" | "tiktok" | "facebook";
-
-// Detect which third-party social embed providers appear in raw WP HTML so we
-// can lazily inject their official SDK exactly once. Patterns match what WP's
-// oEmbed / Gutenberg blocks emit for each provider.
-function detectEmbedProviders(rawHtml: string): EmbedProvider[] {
-  const found = new Set<EmbedProvider>();
-  if (/twitter-tweet|class="[^"]*twitter[^"]*"|twitter\.com\/[^/]+\/status\//i.test(rawHtml))
-    found.add("twitter");
-  if (/instagram-media|instagram\.com\/(p|reel|tv)\//i.test(rawHtml)) found.add("instagram");
-  if (/tiktok-embed|tiktok\.com\/@[^/]+\/video\//i.test(rawHtml)) found.add("tiktok");
-  if (/fb-(post|video|page)|facebook\.com\/plugins\//i.test(rawHtml)) found.add("facebook");
-  return [...found];
+// If the article body uses Facebook embeds, the FB SDK needs this anchor
+// element somewhere in the document to mount its rendered iframes.
+function needsFbRoot(rawHtml: string): boolean {
+  return /fb-(post|video|page)|facebook\.com\/plugins\/|connect\.facebook\.net/i.test(rawHtml);
 }
-
-const PROVIDER_SDK: Record<EmbedProvider, string> = {
-  twitter: "https://platform.twitter.com/widgets.js",
-  instagram: "https://www.instagram.com/embed.js",
-  tiktok: "https://www.tiktok.com/embed.js",
-  facebook: "https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v18.0",
-};
 
 export default async function ArticlePage({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
@@ -97,12 +81,16 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
   const cat = getPrimaryCategory(post);
   const author = getAuthorName(post);
   const html = processContent(post.content.rendered);
-  const embedProviders = detectEmbedProviders(post.content.rendered);
+  const fbRoot = needsFbRoot(post.content.rendered);
 
-  // related posts (same category, exclude current)
-  const related = cat
-    ? (await getPosts({ categories: cat.id, perPage: 5, exclude: [post.id] })).slice(0, 4)
-    : [];
+  // Sidebar (related + mostview + latest) from Bright's custom endpoint. The
+  // endpoint already excludes the current post and returns curated lists, so
+  // we just map them through the WPPost adapter and slice to display sizes.
+  const sidebar = await getArticleSidebar(post.id);
+  const related = sidebar.related.slice(0, 4).map(sidebarPostToWPPost);
+  const galleryRelated = sidebar.related.slice(0, 6).map(sidebarPostToWPPost);
+  const mostview = sidebar.mostview.slice(0, 5).map(sidebarPostToWPPost);
+  const latest = sidebar.latest.slice(0, 4).map(sidebarPostToWPPost);
 
   // Canonical path from WP's nuxtlink (e.g. /social-news/indictment-…)
   const articlePath = getPostPath(post);
@@ -220,49 +208,65 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
             </figure>
           ) : null}
 
-          <div
-            className="article-body"
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
+          {/* ArticleBody is a client component that re-runs any <script> tags
+              in the WP HTML so YouTube/oEmbed/Twitter/Instagram/TikTok/Facebook
+              embeds and any other inline scripts actually execute. */}
+          {fbRoot && <div id="fb-root" />}
+          <ArticleBody html={html} />
 
-          {/* Facebook SDK requires this anchor element */}
-          {embedProviders.includes("facebook") && <div id="fb-root" />}
-
-          {/* Lazily load each detected social embed SDK exactly once. The
-              SDKs auto-process their respective markup that's already in the DOM. */}
-          {embedProviders.map((p) => (
-            <Script
-              key={p}
-              src={PROVIDER_SDK[p]}
-              strategy="lazyOnload"
-              crossOrigin={p === "facebook" ? "anonymous" : undefined}
+          {/* Gallery — clickable thumbnails + full-screen lightbox */}
+          {post.gallery_images && post.gallery_images.length > 0 && (
+            <ArticleGallery
+              images={post.gallery_images}
+              articleTitle={title}
+              articleUrl={`https://www.brighttv.co.th${articlePath}`}
+              relatedPosts={galleryRelated.map((p) => ({
+                id: p.id,
+                title: stripHtml(p.title.rendered),
+                href: getPostPath(p),
+                thumbSrc: getFeaturedImage(p, "medium").url,
+              }))}
             />
-          ))}
-
-          {/* Re-trigger SDK processing after client-side navigation */}
-          {embedProviders.length > 0 && (
-            <SocialEmbedReprocess providers={embedProviders} />
           )}
 
           {/* Tags */}
           <PostTags tagIds={post.tags} />
         </div>
 
-        <aside className="lg:col-span-1 lg:sticky lg:top-[200px] lg:self-start space-y-6">
-          <SectionTitle title="ข่าวที่เกี่ยวข้อง" accent="red" />
-          <div className="space-y-4">
-            {related.map((p) => (
-              <ArticleCard key={p.id} post={p} variant="compact" />
-            ))}
-          </div>
-        </aside>
+        {/* Tall sidebar: let the user scroll through related + mostview first,
+            then pin it so the bottom of the sidebar aligns with the viewport
+            bottom. StickyBottomAside measures its own height on the client
+            and sets the sticky `top` via a CSS var so the math stays right
+            even as content changes. */}
+        <StickyBottomAside className="lg:col-span-1 space-y-10">
+          {related.length > 0 && (
+            <section>
+              <SectionTitle title="ข่าวที่เกี่ยวข้อง" accent="red" />
+              <div className="space-y-4">
+                {related.map((p) => (
+                  <ArticleCard key={p.id} post={p} variant="compact" />
+                ))}
+              </div>
+            </section>
+          )}
+          {mostview.length > 0 && (
+            <section>
+              <SectionTitle title="ข่าวยอดนิยม" accent="red" />
+              <ol className="space-y-5">
+                {mostview.map((p, i) => (
+                  <RankedItem key={p.id} post={p} rank={i + 1} />
+                ))}
+              </ol>
+            </section>
+          )}
+        </StickyBottomAside>
       </div>
 
-      {related.length > 0 && (
+      {latest.length > 0 && (
         <section className="mt-16">
-          <SectionTitle title="อ่านต่อ" />
+          <SectionTitle title="ข่าวล่าสุด" />
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {related.map((p) => (
+            {latest.map((p) => (
               <ArticleCard key={p.id} post={p} variant="feature" />
             ))}
           </div>
