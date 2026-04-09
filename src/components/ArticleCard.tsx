@@ -5,9 +5,11 @@ import {
   getFeaturedImage,
   getPostPath,
   getPrimaryCategory,
+  hasVideo,
   stripHtml,
   timeAgoTH,
 } from "@/lib/wp";
+import PlayBadge from "./PlayBadge";
 
 type Variant = "hero" | "feature" | "list" | "compact" | "small";
 
@@ -28,6 +30,7 @@ export default function ArticleCard({
   const title = stripHtml(post.title.rendered);
   const excerpt = stripHtml(post.excerpt.rendered);
   const href = getPostPath(post);
+  const showPlay = hasVideo(post);
 
   if (variant === "hero") {
     return (
@@ -42,6 +45,7 @@ export default function ArticleCard({
             priority={priority}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+          {showPlay && <PlayBadge size="lg" />}
         </div>
         <div className="absolute left-0 right-0 bottom-0 p-5 sm:p-7 text-white">
           {cat && (
@@ -69,6 +73,7 @@ export default function ArticleCard({
             sizes="(max-width: 768px) 100vw, 400px"
             className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
           />
+          {showPlay && <PlayBadge size="md" />}
         </div>
         <h3 className="mt-3 text-base sm:text-lg font-bold leading-snug text-[var(--bt-text)] clamp-2 group-hover:text-[var(--bt-red)] transition-colors">
           {title}
@@ -89,6 +94,7 @@ export default function ArticleCard({
             sizes="160px"
             className="object-cover transition-transform duration-500 group-hover:scale-[1.05]"
           />
+          {showPlay && <PlayBadge size="sm" />}
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-center">
           {cat && (
@@ -127,6 +133,7 @@ export default function ArticleCard({
           sizes="180px"
           className="object-cover transition-transform duration-500 group-hover:scale-[1.05]"
         />
+        {showPlay && <PlayBadge size="sm" />}
       </div>
       <div className="flex-1 min-w-0">
         {cat && (

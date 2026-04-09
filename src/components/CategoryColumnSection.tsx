@@ -1,7 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
-import { getPosts, getFeaturedImage, getPostPath, stripHtml, timeAgoTH } from "@/lib/wp";
+import { getPosts, getFeaturedImage, getPostPath, hasVideo, stripHtml, timeAgoTH } from "@/lib/wp";
 import ArticleCard from "./ArticleCard";
+import PlayBadge from "./PlayBadge";
 import SectionTitle from "./SectionTitle";
 import { NavCategory } from "@/lib/categories";
 
@@ -41,6 +42,7 @@ export default async function CategoryColumnSection({
                   sizes="(max-width: 640px) 33vw, 200px"
                   className="object-cover transition-transform duration-500 group-hover:scale-[1.05]"
                 />
+                {hasVideo(p) && <PlayBadge size="sm" />}
               </div>
               <h3 className="mt-2 text-[12px] sm:text-[13px] font-semibold leading-snug text-[var(--bt-text)] clamp-2 group-hover:text-[var(--bt-red)] transition-colors">
                 {title}

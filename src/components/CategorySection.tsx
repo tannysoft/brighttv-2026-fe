@@ -9,7 +9,7 @@ export default async function CategorySection({ category }: { category: NavCateg
   const [lead, ...rest] = posts;
 
   return (
-    <section className="mb-12">
+    <section>
       <SectionTitle title={category.name} href={`/category/${category.slug}`} />
       <div className="grid gap-6 md:grid-cols-2">
         <ArticleCard post={lead} variant="feature" />

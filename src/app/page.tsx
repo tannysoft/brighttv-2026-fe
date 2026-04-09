@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { getPosts, getPopularTags, getLottoLatest, getPostPath, stripHtml } from "@/lib/wp";
+import { getPosts, getPopularTags, getLottoLatest, getPostPath, hasVideo, stripHtml } from "@/lib/wp";
 import ArticleCard from "@/components/ArticleCard";
+import PlayBadge from "@/components/PlayBadge";
 import SectionTitle from "@/components/SectionTitle";
 import CategorySection from "@/components/CategorySection";
 import CategoryColumnSection from "@/components/CategoryColumnSection";
@@ -54,19 +55,24 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* TWO-COLUMN main + sidebar */}
-        <div className="grid gap-12 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-12">
-            {MAIN_SECTIONS.map((c) => (
-              <CategorySection key={c.id} category={c} />
-            ))}
-          </div>
-          <aside className="space-y-10">
-            <PopularSidebar />
-            {SIDEBAR_SECTIONS.map((c) => (
-              <SidebarList key={c.id} category={c} />
-            ))}
-          </aside>
+        {/* Paired main + sidebar rows. Each row is its own 2/1 grid so the
+            headers in the left and right columns always start at the same Y,
+            regardless of how tall the previous row's content was. */}
+        <div className="space-y-12">
+          {MAIN_SECTIONS.map((c, i) => (
+            <div key={c.id} className="grid gap-12 lg:grid-cols-3 items-start">
+              <div className="lg:col-span-2">
+                <CategorySection category={c} />
+              </div>
+              <aside>
+                {i === 0 ? (
+                  <PopularSidebar />
+                ) : SIDEBAR_SECTIONS[i - 1] ? (
+                  <SidebarList category={SIDEBAR_SECTIONS[i - 1]} />
+                ) : null}
+              </aside>
+            </div>
+          ))}
         </div>
 
         {/* Crime — full width */}
@@ -191,6 +197,7 @@ async function HoroscopeLottoBlock() {
                   />
                 ) : null;
               })()}
+              {hasVideo(horo[0]) && <PlayBadge size="md" />}
             </div>
             <h3 className="mt-3 text-base sm:text-lg font-bold leading-snug clamp-2 group-hover:text-[#ffd6d8] transition-colors">
               {stripHtml(horo[0].title.rendered)}
@@ -211,6 +218,7 @@ async function HoroscopeLottoBlock() {
                       className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
                     />
                   )}
+                  {hasVideo(p) && <PlayBadge size="sm" />}
                 </div>
                 <h4 className="mt-2 text-[12px] sm:text-[13px] font-semibold leading-snug clamp-2 group-hover:text-[#ffd6d8] transition-colors">
                   {stripHtml(p.title.rendered)}
@@ -330,6 +338,7 @@ async function HoroscopeLottoBlock() {
                             className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.06]"
                           />
                         )}
+                        {hasVideo(p) && <PlayBadge size="sm" />}
                       </div>
                       <h4 className="flex-1 min-w-0 text-[12px] sm:text-[13px] font-bold leading-snug text-[var(--bt-text)] clamp-2 group-hover:text-[var(--bt-red)] transition-colors">
                         {stripHtml(p.title.rendered)}
@@ -362,10 +371,10 @@ async function VideoSection() {
   const [lead, ...rest] = posts;
 
   return (
-    <section className="mt-14 relative -mx-4 sm:mx-0 overflow-hidden sm:rounded-3xl bg-[#0a1929] px-4 sm:px-10 py-10 sm:py-12">
-      {/* Decorative glow */}
-      <div className="pointer-events-none absolute -top-40 -right-40 w-[480px] h-[480px] rounded-full bg-[var(--bt-red)] opacity-15 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-40 -left-40 w-[460px] h-[460px] rounded-full bg-[var(--bt-navy)] opacity-30 blur-3xl" />
+    <section className="mt-14 relative -mx-4 sm:mx-0 overflow-hidden sm:rounded-3xl bg-[#071a2e] px-4 sm:px-10 py-10 sm:py-12">
+      {/* Decorative glow — blue tones only, no red (avoids purple cast) */}
+      <div className="pointer-events-none absolute -top-40 -right-40 w-[480px] h-[480px] rounded-full bg-[#1e6fb8] opacity-25 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -left-40 w-[460px] h-[460px] rounded-full bg-[var(--bt-navy)] opacity-40 blur-3xl" />
       <div className="pointer-events-none absolute inset-0 opacity-[0.04]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "24px 24px" }} />
 
       <div className="relative">
@@ -389,11 +398,11 @@ async function VideoSection() {
           </Link>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
+        <div className="grid gap-5 lg:grid-cols-12 lg:items-stretch">
           {/* Lead video */}
           {lead && (
-            <Link href={getPostPath(lead)} className="group block">
-              <div className="relative aspect-[16/9] rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10">
+            <Link href={getPostPath(lead)} className="group block lg:col-span-7 lg:h-full">
+              <div className="relative aspect-[16/9] lg:aspect-auto lg:h-full rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10">
                 {(() => {
                   const img = lead._embedded?.["wp:featuredmedia"]?.[0]?.source_url;
                   return img ? (
@@ -409,9 +418,9 @@ async function VideoSection() {
 
                 {/* Center play */}
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="relative inline-flex items-center justify-center w-20 h-20 rounded-full bg-[var(--bt-red)] shadow-[0_0_60px_rgba(228,38,43,0.6)] group-hover:scale-110 transition-transform">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" className="text-white ml-1.5"><path d="M8 5v14l11-7z"/></svg>
-                    <span className="absolute inset-0 rounded-full ring-2 ring-white/30 animate-ping" />
+                  <span className="relative inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/15 backdrop-blur-sm ring-1 ring-white/40 group-hover:bg-white/25 group-hover:scale-110 transition-all">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" className="text-white ml-1"><path d="M8 5v14l11-7z"/></svg>
+                    <span className="absolute inset-0 rounded-full ring-1 ring-white/25 animate-ping" />
                   </span>
                 </div>
 
@@ -432,7 +441,7 @@ async function VideoSection() {
           )}
 
           {/* Side video list */}
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 lg:col-span-5">
             {rest.slice(0, 4).map((p) => {
               const img = p._embedded?.["wp:featuredmedia"]?.[0]?.source_url;
               return (
@@ -452,8 +461,8 @@ async function VideoSection() {
                     )}
                     <div className="absolute inset-0 bg-black/30 group-hover:bg-black/15 transition-colors" />
                     <span className="absolute inset-0 flex items-center justify-center">
-                      <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-[var(--bt-red)]/95 group-hover:scale-110 transition-transform shadow-lg">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-white ml-0.5"><path d="M8 5v14l11-7z"/></svg>
+                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white/15 backdrop-blur-sm ring-1 ring-white/40 group-hover:bg-white/25 group-hover:scale-110 transition-all">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-white ml-0.5"><path d="M8 5v14l11-7z"/></svg>
                       </span>
                     </span>
                   </div>

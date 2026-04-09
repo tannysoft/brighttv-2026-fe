@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import Script from "next/script";
 import type { Metadata } from "next";
 import {
   getPostBySlug,
@@ -9,12 +10,14 @@ import {
   getPostPath,
   getPrimaryCategory,
   getAuthorName,
+  getYoutubeId,
   stripHtml,
   thaiDate,
 } from "@/lib/wp";
 import ArticleCard from "@/components/ArticleCard";
 import SectionTitle from "@/components/SectionTitle";
 import JsonLd from "@/components/JsonLd";
+import SocialEmbedReprocess from "@/components/SocialEmbedReprocess";
 import { breadcrumbSchema, newsArticleSchema } from "@/lib/schema";
 
 export const revalidate = 600;
@@ -51,13 +54,37 @@ export async function generateMetadata({
   };
 }
 
-// Rewrite WP image URLs in HTML to load through cdn
+// Sanitise WP HTML for safe injection. Inline <script>/<style> are dropped —
+// we re-add the official SDK for any third-party embed we detect via <Script>.
+// Embed markup itself (blockquotes, iframes) is preserved.
 function processContent(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/loading="lazy"/g, 'loading="lazy" decoding="async"');
 }
+
+type EmbedProvider = "twitter" | "instagram" | "tiktok" | "facebook";
+
+// Detect which third-party social embed providers appear in raw WP HTML so we
+// can lazily inject their official SDK exactly once. Patterns match what WP's
+// oEmbed / Gutenberg blocks emit for each provider.
+function detectEmbedProviders(rawHtml: string): EmbedProvider[] {
+  const found = new Set<EmbedProvider>();
+  if (/twitter-tweet|class="[^"]*twitter[^"]*"|twitter\.com\/[^/]+\/status\//i.test(rawHtml))
+    found.add("twitter");
+  if (/instagram-media|instagram\.com\/(p|reel|tv)\//i.test(rawHtml)) found.add("instagram");
+  if (/tiktok-embed|tiktok\.com\/@[^/]+\/video\//i.test(rawHtml)) found.add("tiktok");
+  if (/fb-(post|video|page)|facebook\.com\/plugins\//i.test(rawHtml)) found.add("facebook");
+  return [...found];
+}
+
+const PROVIDER_SDK: Record<EmbedProvider, string> = {
+  twitter: "https://platform.twitter.com/widgets.js",
+  instagram: "https://www.instagram.com/embed.js",
+  tiktok: "https://www.tiktok.com/embed.js",
+  facebook: "https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v18.0",
+};
 
 export default async function ArticlePage({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
@@ -66,9 +93,11 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
 
   const title = stripHtml(post.title.rendered);
   const img = getFeaturedImage(post, "full");
+  const youtubeId = getYoutubeId(post);
   const cat = getPrimaryCategory(post);
   const author = getAuthorName(post);
   const html = processContent(post.content.rendered);
+  const embedProviders = detectEmbedProviders(post.content.rendered);
 
   // related posts (same category, exclude current)
   const related = cat
@@ -157,7 +186,21 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
             </div>
           </div>
 
-          {img && (
+          {youtubeId ? (
+            <figure className="my-6">
+              <div className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden bg-black">
+                <iframe
+                  src={`https://www.youtube.com/embed/${youtubeId}`}
+                  title={title}
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                  className="absolute inset-0 w-full h-full"
+                />
+              </div>
+            </figure>
+          ) : img ? (
             <figure className="my-6">
               <div className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden bg-[var(--bt-navy-50)]">
                 <Image
@@ -175,12 +218,31 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
                 </figcaption>
               )}
             </figure>
-          )}
+          ) : null}
 
           <div
             className="article-body"
             dangerouslySetInnerHTML={{ __html: html }}
           />
+
+          {/* Facebook SDK requires this anchor element */}
+          {embedProviders.includes("facebook") && <div id="fb-root" />}
+
+          {/* Lazily load each detected social embed SDK exactly once. The
+              SDKs auto-process their respective markup that's already in the DOM. */}
+          {embedProviders.map((p) => (
+            <Script
+              key={p}
+              src={PROVIDER_SDK[p]}
+              strategy="lazyOnload"
+              crossOrigin={p === "facebook" ? "anonymous" : undefined}
+            />
+          ))}
+
+          {/* Re-trigger SDK processing after client-side navigation */}
+          {embedProviders.length > 0 && (
+            <SocialEmbedReprocess providers={embedProviders} />
+          )}
 
           {/* Tags */}
           <PostTags tagIds={post.tags} />

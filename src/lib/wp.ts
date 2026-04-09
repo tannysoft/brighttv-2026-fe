@@ -18,6 +18,10 @@ export type WPPost = {
   categories: number[];
   tags: number[];
   nuxtlink?: string;
+  acf?: {
+    youtube_id?: string | number | null;
+    [key: string]: unknown;
+  };
   primary_category?: Array<{
     id: number;
     name: string;
@@ -172,6 +176,24 @@ export function getPrimaryCategory(post: WPPost) {
   const terms = post._embedded?.["wp:term"]?.[0] || [];
   const filtered = terms.filter((t) => !["uncategorized"].includes(t.slug));
   return filtered[0] || terms[0] || null;
+}
+
+export function hasVideo(post: WPPost): boolean {
+  return getYoutubeId(post) !== null;
+}
+
+// Returns a clean YouTube video id from acf.youtube_id, or null if absent/invalid.
+// Accepts a raw 11-char id, or a full youtube.com / youtu.be URL.
+export function getYoutubeId(post: WPPost): string | null {
+  const raw = post.acf?.youtube_id;
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s || s === "0") return null;
+  // Plain id (most common case in this dataset)
+  if (/^[\w-]{11}$/.test(s)) return s;
+  // Try to parse a URL form
+  const m = s.match(/(?:youtu\.be\/|v=|\/embed\/|\/shorts\/)([\w-]{11})/);
+  return m ? m[1] : null;
 }
 
 export function getAuthorName(post: WPPost) {
