@@ -364,7 +364,7 @@ function ShareRow({ title, url }: { title: string; url: string }) {
             we don't need asymmetric padding to make room for it. */}
         <span
           aria-live="polite"
-          className={`pointer-events-none absolute top-1/2 -translate-y-1/2 left-[calc(100%+14px)] z-20 whitespace-nowrap rounded-full bg-[var(--bt-navy)] !text-white text-[11px] font-bold pl-1.5 pr-1.5 py-1.5 shadow-lg transition-all duration-200 ${
+          className={`pointer-events-none absolute top-1/2 -translate-y-1/2 left-[calc(100%+14px)] z-20 whitespace-nowrap rounded-full bg-[var(--bt-navy)] !text-white text-[11px] font-bold px-3 py-1 shadow-lg transition-all duration-200 ${
             copied ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-1"
           }`}
         >
