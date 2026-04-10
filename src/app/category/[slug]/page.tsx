@@ -23,9 +23,16 @@ export async function generateMetadata({
   const nav = findNavBySlug(slug);
   const cat = nav ? null : await getCategoryBySlug(slug);
   const name = nav?.name || cat?.name || "หมวดหมู่ข่าว";
+  // Use WP category description if available; extend the generic template to
+  // 150+ chars so Google shows the full snippet instead of auto-generating one.
+  const wpDesc = cat?.description ? stripHtml(cat.description) : "";
+  const description =
+    wpDesc ||
+    `รวมข่าว${name}ล่าสุดจาก BRIGHT TV เกาะติดทุกสถานการณ์ อัปเดตทุกความเคลื่อนไหวข่าว${name} ที่คนไทยให้ความสนใจ ครบจบในที่เดียว`;
   return {
     title: `${name} — ข่าว${name}ล่าสุด`,
-    description: `รวมข่าว${name}ล่าสุดจาก BRIGHT TV ติดตามทุกความเคลื่อนไหว ที่คนไทยให้ความสนใจ`,
+    description,
+    alternates: { canonical: `/category/${slug}` },
   };
 }
 

@@ -22,6 +22,10 @@ export const metadata: Metadata = {
   description:
     "ไบรท์ทีวี (Bright TV) สำนักข่าวออนไลน์ เกาะติดทุกสถานการณ์ ข่าวการเมือง สังคม เศรษฐกิจ บันเทิง ต่างประเทศ กีฬา และไลฟ์สไตล์ ครบจบในที่เดียว",
   metadataBase: new URL(SITE_ORIGIN),
+  // Explicit robots directive so crawlers don't guess. Next.js auto-generates
+  // a canonical <link> from metadataBase + the current pathname.
+  robots: { index: true, follow: true },
+  alternates: { canonical: "/" },
   openGraph: { type: "website", siteName: "BRIGHT TV", locale: "th_TH" },
   icons: { icon: "/logo.svg" },
 };

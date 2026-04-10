@@ -198,6 +198,10 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
   // "missing timezone". Fall back to the naked site times with a Thailand
   // +07:00 offset when GMT isn't in the payload.
   const datesAreGmt = Boolean(post.date_gmt);
+  // Pull tag names from the inline taxonomies (contents/v1) so the schema
+  // includes keywords without an extra API call.
+  const tagNames = post.taxonomies?.tags?.map((t) => t.name).filter(Boolean);
+
   const articleSchema = newsArticleSchema({
     url: articlePath,
     headline: title,
@@ -209,6 +213,7 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
     authorName: author,
     authorUrl: getAuthorUrl(post) || undefined,
     categoryName: cat?.name,
+    keywords: tagNames?.length ? tagNames : undefined,
   });
   const crumbSchema = breadcrumbSchema([
     { name: "หน้าแรก", url: "/" },
@@ -340,8 +345,8 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
             />
           )}
 
-          {/* Tags */}
-          <PostTags tagIds={post.tags} />
+          {/* Tags — use taxonomies.tags from contents/v1 directly */}
+          <PostTags tags={post.taxonomies?.tags} />
         </div>
 
         {/* Tall sidebar: let the user scroll through related + mostview first,
@@ -390,38 +395,42 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
   );
 }
 
-async function PostTags({ tagIds }: { tagIds: number[] }) {
-  if (!tagIds?.length) return null;
-  try {
-    const ids = tagIds.slice(0, 12).join(",");
-    const res = await fetch(
-      `${WP_API_ORIGIN}/wp-json/wp/v2/tags?include=${ids}&per_page=12`,
-      { next: { revalidate: 600 } },
-    );
-    if (!res.ok) return null;
-    const tags = (await res.json()) as Array<{ id: number; name: string; slug: string }>;
-    if (!tags.length) return null;
-    return (
-      <div className="mt-8 pt-6 border-t border-[var(--bt-line)]">
-        <p className="text-xs font-bold uppercase tracking-wider text-[var(--bt-red)] mb-3">
-          แท็กที่เกี่ยวข้อง
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {tags.map((t) => (
+// Uses post.taxonomies.tags from contents/v1 — no separate API call needed.
+function PostTags({
+  tags,
+}: {
+  tags?: Array<{ id: number; name: string; slug?: string; nicename?: string }>;
+}) {
+  if (!tags?.length) return null;
+  return (
+    <div className="mt-8 pt-6 border-t border-[var(--bt-line)]">
+      <p className="text-xs font-bold uppercase tracking-wider text-[var(--bt-red)] mb-3">
+        แท็กที่เกี่ยวข้อง
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {tags.slice(0, 12).map((t) => {
+          const slug = t.slug || t.nicename || "";
+          return (
             <Link
               key={t.id}
-              href={`/tag/${t.slug}`}
+              href={`/tag/${safeDecode(slug)}`}
               className="inline-flex items-center gap-1 h-8 px-3 rounded-full bg-[var(--bt-bg)] border border-[var(--bt-line)] text-[13px] font-semibold text-[var(--bt-navy)] hover:bg-[var(--bt-navy)] hover:!text-white hover:border-[var(--bt-navy)] transition-colors"
             >
               <span className="text-[var(--bt-red)]">#</span>
               {t.name}
             </Link>
-          ))}
-        </div>
+          );
+        })}
       </div>
-    );
+    </div>
+  );
+}
+
+function safeDecode(s: string): string {
+  try {
+    return decodeURIComponent(s);
   } catch {
-    return null;
+    return s;
   }
 }
 

@@ -1,0 +1,8 @@
+# Bright TV — Headless Next.js Frontend
+# Production: www.brighttv.co.th
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /_next/
+
+Sitemap: https://www.brighttv.co.th/sitemap_index.xml
