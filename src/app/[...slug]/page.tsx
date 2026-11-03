@@ -24,7 +24,7 @@ import JsonLd from "@/components/JsonLd";
 import RankedItem from "@/components/RankedItem";
 import StickyBottomAside from "@/components/StickyBottomAside";
 import TopKeywordsWidget from "@/components/TopKeywordsWidget";
-import { breadcrumbSchema, newsArticleSchema } from "@/lib/schema";
+import { breadcrumbSchema, newsArticleSchema, videoObjectSchema } from "@/lib/schema";
 
 export const revalidate = 600;
 
@@ -190,7 +190,7 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
   // frozen into the cached HTML until `revalidate` expires.
   const latest = pickRandom(sidebar.latest, 4).map(sidebarPostToWPPost);
 
-  // Canonical path from WP's nuxtlink (e.g. /social-news/indictment-…)
+  // Canonical path from WP's pathname (e.g. /social-news/indictment-…)
   const articlePath = getPostPath(post);
 
   // Prefer the GMT timestamps from WP so we can append a strict `Z` suffix
@@ -221,9 +221,23 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
     { name: title, url: articlePath },
   ]);
 
+  // VideoObject for Google Video rich results — only when article has YouTube.
+  const videoSchema = youtubeId
+    ? videoObjectSchema({
+        name: title,
+        description: stripHtml(post.excerpt.rendered).slice(0, 200),
+        thumbnailUrl: img?.url || `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`,
+        uploadDate: post.date_gmt || post.date,
+        embedUrl: `https://www.youtube.com/embed/${youtubeId}`,
+        datesAreGmt: datesAreGmt,
+      })
+    : null;
+
+  const schemas = [articleSchema, crumbSchema, ...(videoSchema ? [videoSchema] : [])];
+
   return (
     <article className="mx-auto max-w-[1240px] px-4 py-8">
-      <JsonLd data={[articleSchema, crumbSchema]} />
+      <JsonLd data={schemas} />
       <nav className="text-xs text-[var(--bt-muted)] mb-4 flex items-center gap-2 whitespace-nowrap overflow-hidden">
         <Link href="/" className="shrink-0 hover:text-[var(--bt-red)]">หน้าแรก</Link>
         <span className="shrink-0">›</span>
@@ -254,13 +268,36 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
 
           <div className="mt-4 flex items-center justify-between gap-4 text-xs text-[var(--bt-muted)] border-b border-[var(--bt-line)] pb-5 flex-wrap">
             <div className="flex items-center gap-3">
-              <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-[var(--bt-navy)] !text-white font-bold">
-                {author.slice(0, 1)}
-              </span>
-              <div>
-                <div className="font-semibold text-[var(--bt-text)]">{author}</div>
-                <div>เผยแพร่ {thaiDate(post.date, { withTime: true })}</div>
-              </div>
+              {(() => {
+                const authorSlug = post.author_info?.pathname || post._embedded?.author?.[0]?.slug;
+                const authorHref = authorSlug
+                  ? (authorSlug.startsWith("/") ? authorSlug : `/author/${authorSlug}`)
+                  : null;
+                const avatarEl = (
+                  <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-[var(--bt-navy)] !text-white font-bold shrink-0">
+                    {author.slice(0, 1)}
+                  </span>
+                );
+                const nameEl = (
+                  <div>
+                    <div className="font-semibold text-[var(--bt-text)] hover:text-[var(--bt-red)] transition-colors">
+                      {author}
+                    </div>
+                    <div>เผยแพร่ {thaiDate(post.date, { withTime: true })}</div>
+                  </div>
+                );
+                return authorHref ? (
+                  <Link href={authorHref} className="flex items-center gap-3 group">
+                    {avatarEl}
+                    {nameEl}
+                  </Link>
+                ) : (
+                  <>
+                    {avatarEl}
+                    {nameEl}
+                  </>
+                );
+              })()}
             </div>
             <div className="flex items-center gap-2">
               <ShareIconLink
@@ -322,6 +359,13 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
               )}
             </figure>
           ) : null}
+
+          {/* Excerpt — summary text below the featured image/video */}
+          {post.excerpt.rendered && (
+            <p className="my-6 text-[15px] sm:text-[17px] leading-relaxed text-[var(--bt-muted)] font-medium">
+              {stripHtml(post.excerpt.rendered)}
+            </p>
+          )}
 
           {/* ArticleBody is a client component that re-runs any <script> tags
               in the WP HTML so YouTube/oEmbed/Twitter/Instagram/TikTok/Facebook

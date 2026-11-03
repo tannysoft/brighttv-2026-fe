@@ -116,6 +116,33 @@ export function newsArticleSchema(args: {
   };
 }
 
+// VideoObject schema for articles with an embedded YouTube video. Google
+// uses this to show video rich results in search.
+export function videoObjectSchema(args: {
+  name: string;
+  description: string;
+  thumbnailUrl: string;
+  uploadDate: string;
+  contentUrl?: string;
+  embedUrl: string;
+  datesAreGmt?: boolean;
+}) {
+  const tz = args.datesAreGmt ? "Z" : "+07:00";
+  const uploadDate = /Z$|[+-]\d{2}:?\d{2}$/.test(args.uploadDate)
+    ? args.uploadDate
+    : `${args.uploadDate}${tz}`;
+  return {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    name: args.name,
+    description: args.description,
+    thumbnailUrl: args.thumbnailUrl,
+    uploadDate,
+    contentUrl: args.contentUrl || `https://www.youtube.com/watch?v=${args.embedUrl.split("/embed/").pop()}`,
+    embedUrl: args.embedUrl,
+  };
+}
+
 export function collectionPageSchema(args: {
   url: string;
   name: string;

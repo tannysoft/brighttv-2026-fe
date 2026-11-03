@@ -97,7 +97,7 @@ export function getPrimaryCategory(post: WPPost) {
       name: primary.name,
       slug: primary.nicename,
       taxonomy: "category",
-      link: primary.nuxtlink || `/category/${primary.nicename}`,
+      link: primary.pathname || `/category/${primary.nicename}`,
     };
   }
   // 2. NEW taxonomies.categories from contents/v1.
@@ -110,7 +110,7 @@ export function getPrimaryCategory(post: WPPost) {
       name: c.name,
       slug,
       taxonomy: "category",
-      link: c.nuxtlink || `/category/${slug}`,
+      link: c.pathname || `/category/${slug}`,
     };
   }
   // 3. Legacy _embedded terms.
@@ -131,8 +131,8 @@ export function getAuthorName(post: WPPost): string {
 export function getAuthorUrl(post: WPPost): string | null {
   // Prefer contents/v1's author_info.
   if (post.author_info?.author_link) return post.author_info.author_link;
-  if (post.author_info?.nuxtlink)
-    return `https://www.brighttv.co.th${post.author_info.nuxtlink}`;
+  if (post.author_info?.pathname)
+    return `https://www.brighttv.co.th${post.author_info.pathname}`;
   // Legacy _embedded.
   const a = post._embedded?.author?.[0];
   if (!a) return null;
@@ -145,12 +145,12 @@ export function getAuthorUrl(post: WPPost): string | null {
 
 /**
  * Derive a site-relative path for a post.
- * Prefers the `nuxtlink` field (already site-relative on both endpoints).
+ * Prefers the `pathname` field (already site-relative on both endpoints).
  * Falls back to parsing `link`, then `/{slug}`.
  */
 export function getPostPath(post: WPPost): string {
-  if (post.nuxtlink && post.nuxtlink.startsWith("/")) {
-    return post.nuxtlink.replace(/\/$/, "") || `/${post.slug}`;
+  if (post.pathname && post.pathname.startsWith("/")) {
+    return post.pathname.replace(/\/$/, "") || `/${post.slug}`;
   }
   try {
     if (post.link) {
@@ -192,7 +192,7 @@ export function getYoutubeId(post: WPPost): string | null {
 
 // ---------- sidebar adapter ----------
 
-// Adapt a SidebarPost (Bright's custom /nuxt/v1/sidebar shape) into a
+// Adapt a SidebarPost (Bright's custom /contents/v1/sidebar shape) into a
 // WPPost-shaped object so it can be passed straight into ArticleCard /
 // other components. The adapter populates BOTH the new featured_image
 // field AND the legacy _embedded shape so every helper works regardless.
@@ -234,7 +234,7 @@ export function sidebarPostToWPPost(s: SidebarPost): WPPost {
           id: s.primary_category.id,
           name: s.primary_category.name,
           nicename: s.primary_category.slug,
-          nuxtlink: s.primary_category.nuxtlink,
+          pathname: s.primary_category.pathname,
         },
       ]
     : undefined;
@@ -252,7 +252,7 @@ export function sidebarPostToWPPost(s: SidebarPost): WPPost {
     featured_media: featuredMedia?.[0]?.id ?? 0,
     categories: s.primary_category ? [s.primary_category.id] : [],
     tags: [],
-    nuxtlink: s.nuxtlink,
+    pathname: s.pathname,
     views: s.views,
     primary_category,
     // Populate BOTH new and legacy fields for full compat.

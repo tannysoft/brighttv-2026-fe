@@ -26,7 +26,28 @@ export const metadata: Metadata = {
   // a canonical <link> from metadataBase + the current pathname.
   robots: { index: true, follow: true },
   alternates: { canonical: "/" },
-  openGraph: { type: "website", siteName: "BRIGHT TV", locale: "th_TH" },
+  openGraph: {
+    type: "website",
+    siteName: "BRIGHT TV",
+    locale: "th_TH",
+    // Default og:image used when a page doesn't set its own (homepage,
+    // category, tag, author, search). Article pages override this with
+    // their featured image via generateMetadata.
+    images: [
+      {
+        url: "https://cdn.brighttv.co.th/wp-content/uploads/2017/07/04102155/brighttv-default.jpg",
+        width: 1200,
+        height: 630,
+        alt: "BRIGHT TV",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: [
+      "https://cdn.brighttv.co.th/wp-content/uploads/2017/07/04102155/brighttv-default.jpg",
+    ],
+  },
   icons: { icon: "/logo.svg" },
 };
 

@@ -11,6 +11,8 @@
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
+  // TODO: paste your Cloudflare Account ID here (from `npx wrangler whoami`)
+  "account_id": "8a21a543bd0ac55148179deddb67ee1c",
   "name": "brighttv-2026-fe",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-03-01",

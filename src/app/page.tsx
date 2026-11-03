@@ -6,6 +6,8 @@ import {
   getPosts,
   getTopTags,
 } from "@/lib/wp";
+import { breadcrumbSchema } from "@/lib/schema";
+import JsonLd from "@/components/JsonLd";
 import {
   DEFAULT_FEATURED_IMAGE,
   getFeaturedImage,
@@ -24,8 +26,10 @@ import CategoryColumnSection from "@/components/CategoryColumnSection";
 import BreakingTicker from "@/components/BreakingTicker";
 import { HOMEPAGE_SECTIONS } from "@/lib/categories";
 
+// ISR: render once, cache for 5 minutes, revalidate in background.
+// DO NOT add `dynamic = "force-dynamic"` — it overrides revalidate and
+// forces full SSR on every single request (the #1 cause of slow TTFB).
 export const revalidate = 300;
-export const dynamic = "force-dynamic";
 
 const CRIME = HOMEPAGE_SECTIONS.find((c) => c.slug === "crime")!;
 const MAIN_SECTIONS = HOMEPAGE_SECTIONS.filter((c) => c.slug !== "crime").slice(0, 3);
@@ -37,14 +41,32 @@ const LOTTO = { id: 124708, slug: "lotto", name: "ตรวจหวย" };
 const VIDEO = { id: 4, slug: "hot-clip", name: "วิดีโอ" };
 
 export default async function HomePage() {
-  const latest = await getPosts({ perPage: 13 });
+  // Pre-fetch ALL independent data in parallel. This turns 17 sequential
+  // API calls (~5-17s) into ~3 parallel batches (~1-2s total). Each async
+  // component below receives pre-fetched data instead of fetching its own.
+  const [
+    latest,
+    breakingPosts,
+    crimePosts,
+    mostViewRaw,
+    videoPosts,
+  ] = await Promise.all([
+    getPosts({ perPage: 13 }),
+    getPosts({ perPage: 10 }),
+    getPosts({ categories: CRIME.id, perPage: 5 }),
+    getMostViewPosts(),
+    getPosts({ categories: VIDEO.id, perPage: 5 }),
+  ]);
+
   const [hero, ...rest] = latest;
   const featured = rest.slice(0, 4);
   const recent = rest.slice(4, 12);
 
   return (
     <>
-      <BreakingTicker />
+      <BreakingTicker posts={breakingPosts} />
+
+      <JsonLd data={[breadcrumbSchema([{ name: "หน้าแรก", url: "/" }])]} />
 
       <div className="mx-auto max-w-[1240px] px-4 py-8">
         {/* Accessible H1 for search engines — visually hidden so it doesn't
@@ -82,7 +104,7 @@ export default async function HomePage() {
               </div>
               <aside>
                 {i === 0 ? (
-                  <PopularSidebar />
+                  <PopularSidebar posts={mostViewRaw} />
                 ) : SIDEBAR_SECTIONS[i - 1] ? (
                   <SidebarList category={SIDEBAR_SECTIONS[i - 1]} />
                 ) : null}
@@ -92,7 +114,7 @@ export default async function HomePage() {
         </div>
 
         {/* Crime — full width */}
-        <CrimeFullWidth />
+        <CrimeFullWidth posts={crimePosts} />
 
         {/* Lifestyle + Health */}
         <div className="grid gap-10 lg:grid-cols-2 mt-12">
@@ -105,7 +127,7 @@ export default async function HomePage() {
         <HoroscopeLottoBlock />
 
         {/* Video section */}
-        <VideoSection />
+        <VideoSection posts={videoPosts} />
 
         {/* Popular tags */}
         <PopularTags />
@@ -114,8 +136,7 @@ export default async function HomePage() {
   );
 }
 
-async function CrimeFullWidth() {
-  const posts = await getPosts({ categories: CRIME.id, perPage: 5 });
+function CrimeFullWidth({ posts }: { posts: import("@/lib/wp").WPPost[] }) {
   if (!posts.length) return null;
   const [lead, ...rest] = posts;
   return (
@@ -131,8 +152,7 @@ async function CrimeFullWidth() {
   );
 }
 
-async function PopularSidebar() {
-  const raw = await getMostViewPosts();
+function PopularSidebar({ posts: raw }: { posts: import("@/lib/wp").SidebarPost[] }) {
   const posts = raw.slice(0, 5).map(sidebarPostToWPPost);
   if (!posts.length) return null;
   return (
@@ -374,8 +394,7 @@ async function HoroscopeLottoBlock() {
   );
 }
 
-async function VideoSection() {
-  const posts = await getPosts({ categories: VIDEO.id, perPage: 5 });
+function VideoSection({ posts }: { posts: import("@/lib/wp").WPPost[] }) {
   if (!posts.length) return null;
   const [lead, ...rest] = posts;
 
@@ -492,7 +511,7 @@ async function VideoSection() {
 
 async function PopularTags() {
   // Merge two tag sources in parallel:
-  //   1. `nuxt/v1/top-tags?is_home=true` → trending tags across recent
+  //   1. `contents/v1/top-tags?is_home=true` → trending tags across recent
   //      homepage-visible posts (fresh, contextual — ranked first)
   //   2. `wp/v2/tags?orderby=count` → all-time popular tags (stable filler
   //      for categories the trending feed didn't cover today)

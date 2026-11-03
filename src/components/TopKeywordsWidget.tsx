@@ -3,7 +3,7 @@ import { getTopTags } from "@/lib/wp";
 import SectionTitle from "./SectionTitle";
 
 // "แท็กยอดนิยม" pill cloud rendered at the bottom of the article page
-// sidebar. Data comes from `/wp-json/nuxt/v1/top-tags` (Bright's custom
+// sidebar. Data comes from `/wp-json/contents/v1/top-tags` (Bright's custom
 // endpoint that ranks tags by post count across a recent scan window).
 export default async function TopKeywordsWidget() {
   const tags = await getTopTags();

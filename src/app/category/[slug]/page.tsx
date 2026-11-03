@@ -55,6 +55,8 @@ export default async function CategoryPage({
   let categoryId: number | undefined = nav?.id;
   let categoryName: string | undefined = nav?.name;
   let wpDescription = "";
+  let acfHeading2 = "";
+  let acfContents = "";
   let posts;
 
   if (nav) {
@@ -63,6 +65,8 @@ export default async function CategoryPage({
       getPosts({ categories: nav.id, perPage, page }),
     ]);
     if (wpCat?.description) wpDescription = wpCat.description;
+    acfHeading2 = wpCat?.acf?.heading_2 ?? "";
+    acfContents = wpCat?.acf?.contents ?? "";
     posts = fetched;
   } else {
     const wpCat = await getCategoryBySlug(slug);
@@ -70,6 +74,8 @@ export default async function CategoryPage({
     categoryId = wpCat.id;
     categoryName = wpCat.name;
     wpDescription = wpCat.description ?? "";
+    acfHeading2 = wpCat.acf?.heading_2 ?? "";
+    acfContents = wpCat.acf?.contents ?? "";
     posts = await getPosts({ categories: wpCat.id, perPage, page });
   }
 
@@ -146,6 +152,23 @@ export default async function CategoryPage({
           </Link>
         )}
       </div>
+
+      {/* ACF content from WP category — heading_2 + contents (HTML) */}
+      {(acfHeading2 || acfContents) && (
+        <section className="mt-14 pt-10 border-t border-[var(--bt-line)]">
+          {acfHeading2 && (
+            <h2 className="text-xl sm:text-2xl font-extrabold text-[var(--bt-navy)] mb-4">
+              {acfHeading2}
+            </h2>
+          )}
+          {acfContents && (
+            <div
+              className="article-body prose prose-sm max-w-none text-[var(--bt-text)] leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: acfContents }}
+            />
+          )}
+        </section>
+      )}
     </div>
   );
 }

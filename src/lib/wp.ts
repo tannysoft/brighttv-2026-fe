@@ -34,7 +34,7 @@ export type WPImageSize = {
 };
 
 // Featured image shape returned by both /contents/v1/posts and the sidebar
-// nuxt/v1/sidebar endpoint. Same shape as gallery_images items.
+// contents/v1/sidebar endpoint. Same shape as gallery_images items.
 export type WPFeaturedImage = {
   alt?: string;
   sizes?: Partial<Record<string, WPImageSize>>;
@@ -43,7 +43,7 @@ export type WPFeaturedImage = {
 export type WPAuthorInfo = {
   display_name: string;
   author_link?: string;
-  nuxtlink?: string;
+  pathname?: string;
 };
 
 export type WPTaxonomyTerm = {
@@ -51,7 +51,7 @@ export type WPTaxonomyTerm = {
   name: string;
   nicename?: string;
   slug?: string;
-  nuxtlink?: string;
+  pathname?: string;
 };
 
 export type WPPost = {
@@ -69,7 +69,7 @@ export type WPPost = {
   featured_media: number;
   categories: number[];
   tags: number[];
-  nuxtlink?: string;
+  pathname?: string;
 
   // Optional view count — only set by sidebarPostToWPPost().
   views?: string | number;
@@ -100,7 +100,7 @@ export type WPPost = {
     id: number;
     name: string;
     nicename: string;
-    nuxtlink?: string;
+    pathname?: string;
   }>;
 
   // YouTube video id — `video` from contents/v1 (may be null) OR
@@ -144,6 +144,11 @@ export type WPCategory = {
   description: string;
   parent: number;
   link: string;
+  acf?: {
+    heading_2?: string;
+    contents?: string;
+    [key: string]: unknown;
+  };
 };
 
 export type WPUser = {
@@ -181,14 +186,14 @@ export type LottoResult = {
   runningNumbers: LottoPrize[];
 };
 
-// ---------- Bright "nuxt/v1/sidebar" endpoint shapes ----------
+// ---------- Bright "contents/v1/sidebar" endpoint shapes ----------
 
 export type SidebarCategory = {
   id: number;
   name: string;
   slug: string;
   link?: string;
-  nuxtlink?: string;
+  pathname?: string;
 };
 
 export type SidebarPost = {
@@ -199,7 +204,7 @@ export type SidebarPost = {
   author: string;
   featured_image?: WPFeaturedImage;
   primary_category?: SidebarCategory;
-  nuxtlink?: string;
+  pathname?: string;
   views?: string | number;
 };
 
@@ -220,10 +225,15 @@ export type TopTag = {
 
 // ---------- internal ----------
 
+const isDev = process.env.NODE_ENV === "development";
+
 async function apiFetch<T>(url: string, ttl = REVALIDATE): Promise<T | null> {
   try {
+    // Dev: no-store → always fresh data for debugging.
+    // Prod: force-cache + revalidate → ISR cached, fast TTFB.
     const res = await fetch(url, {
-      next: { revalidate: ttl },
+      cache: isDev ? "no-store" : "force-cache",
+      ...(!isDev && { next: { revalidate: ttl } }),
       headers: WP_FETCH_HEADERS,
     });
     if (!res.ok) {
@@ -246,9 +256,11 @@ export async function getPosts(params: {
   page?: number;
   categories?: number | number[];
   author?: number | number[];
+  tags?: number | number[];
+  tagSlug?: string;
   exclude?: number[];
   search?: string;
-  embed?: boolean; // ignored — contents/v1 always includes embedded data
+  embed?: boolean;
 } = {}): Promise<WPPost[]> {
   const sp = new URLSearchParams();
   sp.set("per_page", String(params.perPage ?? 12));
@@ -265,6 +277,13 @@ export async function getPosts(params: {
       Array.isArray(params.author) ? params.author.join(",") : String(params.author),
     );
   }
+  if (params.tags) {
+    sp.set(
+      "tags",
+      Array.isArray(params.tags) ? params.tags.join(",") : String(params.tags),
+    );
+  }
+  if (params.tagSlug) sp.set("tag_slug", params.tagSlug);
   if (params.exclude?.length) sp.set("exclude", params.exclude.join(","));
   if (params.search) sp.set("search", params.search);
 
@@ -328,7 +347,7 @@ export async function getLottoLatest(): Promise<LottoResult | null> {
 export async function getMostViewPosts(): Promise<SidebarPost[]> {
   try {
     const res = await fetch(
-      `${WP_API_ORIGIN}/wp-json/nuxt/v1/sidebar?type=mostview`,
+      `${WP_API_ORIGIN}/wp-json/contents/v1/sidebar?type=mostview`,
       { next: { revalidate: REVALIDATE }, headers: WP_FETCH_HEADERS },
     );
     if (!res.ok) return [];
@@ -343,7 +362,7 @@ export async function getArticleSidebar(postId: number): Promise<SidebarResponse
   const empty: SidebarResponse = { related: [], latest: [], mostview: [] };
   try {
     const res = await fetch(
-      `${WP_API_ORIGIN}/wp-json/nuxt/v1/sidebar?id=${postId}`,
+      `${WP_API_ORIGIN}/wp-json/contents/v1/sidebar?id=${postId}`,
       { next: { revalidate: REVALIDATE }, headers: WP_FETCH_HEADERS },
     );
     if (!res.ok) return empty;
@@ -364,8 +383,8 @@ export async function getTopTags(
   opts: { isHome?: boolean } = {},
 ): Promise<TopTag[]> {
   const url = opts.isHome
-    ? `${WP_API_ORIGIN}/wp-json/nuxt/v1/top-tags?is_home=true`
-    : `${WP_API_ORIGIN}/wp-json/nuxt/v1/top-tags`;
+    ? `${WP_API_ORIGIN}/wp-json/contents/v1/top-tags?is_home=true`
+    : `${WP_API_ORIGIN}/wp-json/contents/v1/top-tags`;
   try {
     const res = await fetch(url, {
       next: { revalidate: REVALIDATE },

@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { getPosts } from "@/lib/wp";
-import { stripHtml } from "@/lib/utils";
+import type { WPPost } from "@/lib/wp";
+import { getPostPath, stripHtml } from "@/lib/utils";
 
-export default async function BreakingTicker() {
-  const posts = await getPosts({ perPage: 10 });
+// Accepts pre-fetched posts so the homepage can batch all API calls in
+// a single Promise.all instead of each component fetching independently.
+export default function BreakingTicker({ posts }: { posts: WPPost[] }) {
   if (!posts.length) return null;
   const items = posts.map((p) => ({
     title: stripHtml(p.title.rendered),
-    href: `/news/${p.slug}`,
+    href: getPostPath(p),
   }));
   // duplicate for seamless loop
   const loop = [...items, ...items];
