@@ -2,6 +2,12 @@
  * Bright TV website (Next.js on Workers via OpenNext).
  *   pnpm --filter @brighttv/web run preview   # build + local wrangler dev
  *   pnpm --filter @brighttv/web run deploy    # build + deploy
+ *
+ * Workers Builds (every push to main deploys):
+ *   Path: /apps/web
+ *   Build: pnpm install --frozen-lockfile && pnpm exec opennextjs-cloudflare build
+ *   Deploy: pnpm exec opennextjs-cloudflare deploy
+ *   Watch paths: apps/web/*, packages/*, pnpm-lock.yaml
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
