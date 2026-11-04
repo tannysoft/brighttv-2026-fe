@@ -342,20 +342,55 @@ export async function getUserBySlug(slug: string): Promise<WPUser | null> {
   return data && data.length ? data[0] : null;
 }
 
-// ---------- lottery (third-party API) ----------
+// ---------- lottery (Government Lottery Office API) ----------
 
+type GloPrize = { price: string; number: Array<{ value: string }> };
+const GLO_PRIZES: Array<[key: string, id: string, name: string, running: boolean]> = [
+  ["first", "prizeFirst", "รางวัลที่ 1", false],
+  ["near1", "prizeFirstNear", "รางวัลข้างเคียงรางวัลที่ 1", false],
+  ["second", "prizeSecond", "รางวัลที่ 2", false],
+  ["third", "prizeThird", "รางวัลที่ 3", false],
+  ["fourth", "prizeForth", "รางวัลที่ 4", false],
+  ["fifth", "prizeFifth", "รางวัลที่ 5", false],
+  ["last3f", "runningNumberFrontThree", "รางวัลเลขหน้า 3 ตัว", true],
+  ["last3b", "runningNumberBackThree", "รางวัลเลขท้าย 3 ตัว", true],
+  ["last2", "runningNumberBackTwo", "รางวัลเลขท้าย 2 ตัว", true],
+];
+
+/** Latest draw from glo.or.th, in the shape the lottery pages use. */
 export async function getLottoLatest(): Promise<LottoResult | null> {
   try {
-    const res = await fetch("https://lotto.api.rayriffy.com/latest", {
+    const res = await fetch("https://www.glo.or.th/api/lottery/getLatestLottery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
       next: { revalidate: 1800 },
     });
     if (!res.ok) return null;
-    const data = await res.json();
-    if (data?.status !== "success") return null;
-    return data.response as LottoResult;
+    const json = (await res.json()) as {
+      status?: boolean;
+      response?: { date?: string; data?: Record<string, GloPrize> };
+    };
+    const data = json.response?.data;
+    if (!json.status || !data || !json.response?.date) return null;
+    const result: LottoResult = { date: thaiDate(json.response.date), prizes: [], runningNumbers: [] };
+    for (const [key, id, name, running] of GLO_PRIZES) {
+      const p = data[key];
+      if (!p) continue;
+      const number = p.number.map((n) => n.value).sort();
+      const reward = String(Math.round(Number(p.price)));
+      (running ? result.runningNumbers : result.prizes).push({ id, name, reward, amount: number.length, number });
+    }
+    return result.prizes.length ? result : null;
   } catch {
     return null;
   }
+}
+
+/** "2026-11-01" → "1 พฤศจิกายน 2569" */
+function thaiDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00+07:00`);
+  return d.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Bangkok" });
 }
 
 // ---------- Bright custom sidebar endpoint ----------
