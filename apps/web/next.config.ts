@@ -130,7 +130,8 @@ const nextConfig: NextConfig = {
       },
       // API responses (views, revalidate, preview, goto) are never shared-cached.
       // (Sitemaps are rewritten to /api/sitemap but matched by their public .xml URL.)
-      { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "private, no-store" }] },
+      // (/api/horoscope/profile is evergreen and sets its own public cache.)
+      { source: "/api/:path((?!horoscope/profile).*)", headers: [{ key: "Cache-Control", value: "private, no-store" }] },
     ];
   },
 

@@ -41,3 +41,4 @@ settings.local.json
 
 # lottery backfill output
 .backfill.sql
+.horoscope.sql

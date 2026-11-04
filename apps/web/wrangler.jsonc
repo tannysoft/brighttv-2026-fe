@@ -65,6 +65,13 @@
       "binding": "LOTTO_DB",
       "database_name": "brighttv-lotto",
       "database_id": "2776ae8c-00b4-45df-8dca-070dfb392830"
+    },
+    {
+      // /horoscope: sections of horoscope articles by day of birth / zodiac
+      // and "Pick a card" piles (scripts/horoscope/extract.ts writes it).
+      "binding": "HORO_DB",
+      "database_name": "brighttv-horoscope",
+      "database_id": "0359f785-c52c-4863-9309-6069275ab313"
     }
   ],
   "durable_objects": {

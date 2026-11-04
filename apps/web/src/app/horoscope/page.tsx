@@ -8,9 +8,10 @@ import { HOROSCOPE_TAGS, ZODIACS, dayColorOf } from "@/lib/horoscope-data";
 import ArticleCard from "@/components/ArticleCard";
 import SectionTitle from "@/components/SectionTitle";
 import JsonLd from "@/components/JsonLd";
-import TarotPick from "@/components/horoscope/TarotPick";
 import NumerologyCalc from "@/components/horoscope/NumerologyCalc";
-import BirthdayColor from "@/components/horoscope/BirthdayColor";
+import PickACard from "@/components/horoscope/PickACard";
+import BirthProfile from "@/components/horoscope/BirthProfile";
+import { getCard, pickCardId } from "@/lib/horoscope";
 import { DEFAULT_OG_IMAGE, SITE_NAME, breadcrumbSchema, collectionPageSchema } from "@/lib/schema";
 
 // Horoscope hub: daily/weekly/monthly readings, the 12 signs, interactive
@@ -35,6 +36,8 @@ export const metadata: Metadata = {
 
 export default async function HoroscopePage() {
   const byTag = (tags: number, perPage: number) => getPosts({ tags, perPage });
+  const todayCardId = await pickCardId("today");
+  const todayCard = todayCardId ? await getCard(todayCardId) : null;
   const [daily, weekly, monthly, love, money, latest, ...zodiacPosts] = await Promise.all([
     byTag(HOROSCOPE_TAGS.daily, 4),
     byTag(HOROSCOPE_TAGS.weekly, 1),
@@ -134,13 +137,17 @@ export default async function HoroscopePage() {
         </ul>
       </section>
 
-      {/* Tools */}
-      <section className="mb-12 grid gap-4 lg:grid-cols-3">
-        <TarotPick moreHref={tagHref("ดูดวงไพ่ทาโรต์")} />
+      {/* Personal profile: by day of birth / zodiac, from the astrologers' articles */}
+      <div className="mb-12">
+        <BirthProfile defaultDay={todayColor.key} />
+      </div>
+
+      {/* Pick a card (archive of tarot readers' spreads) + numerology */}
+      <section className="mb-4 grid gap-4 lg:grid-cols-3 items-start">
+        <div className="lg:col-span-2">{todayCard && <PickACard initial={todayCard} />}</div>
         <NumerologyCalc />
-        <BirthdayColor todayKey={todayColor.key} moreHref={tagHref("สีมงคล")} />
       </section>
-      <p className="-mt-9 mb-12 text-[11px] text-[var(--bt-muted)]">* ไพ่ทาโรต์ เลขศาสตร์ และสีประจำวันเกิด เป็นความเชื่อเพื่อความบันเทิง</p>
+      <p className="mb-12 text-[11px] text-[var(--bt-muted)]">* คำทำนาย ไพ่ และเลขศาสตร์ เป็นความเชื่อส่วนบุคคล โปรดใช้วิจารณญาณ</p>
 
       {/* Love & money */}
       <div className="grid gap-10 lg:grid-cols-2 mb-12">

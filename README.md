@@ -158,6 +158,14 @@ pnpm --filter @brighttv/web run deploy   # SITE_NOINDEX=1 ใน wrangler.jsonc 
 - secret `REVALIDATE_SECRET` ของ `brighttv-lotto` ต้องตรงกับของ `brighttv-web`
 - ทดสอบ job บนเครื่อง: `pnpm --filter @brighttv/lotto run dev` แล้วเปิด `http://localhost:8787/__scheduled`
 
+## หน้าดูดวง (`/horoscope`)
+
+- ส่วน "ดวงประจำตัวคุณ" (ตามวันเกิด/ราศี) และ "Pick a card" อ่านจาก D1 `brighttv-horoscope` ซึ่งตัดมาจากบทความดูดวงของเว็บ (ข้อความของหมอดูเอง มีลิงก์กลับไปบทความทุกชิ้น)
+- สร้าง/อัปเดตข้อมูล: `cd apps/web && node scripts/horoscope/extract.ts` (เพิ่ม `--local` สำหรับ D1 บนเครื่อง, `--dry` ดู SQL ก่อน)
+  - บทความที่ใช้ทำ "ดวงประจำตัว" เลือกไว้ใน `PROFILE_SOURCES` ในสคริปต์ (เฉพาะเรื่องที่ไม่ผูกกับวันเวลา เช่น นิสัย เลขมงคล สีเสริมดวง คู่แท้) ถ้ามีบทความใหม่แบบแยก 7 วันเกิด/12 ราศี ให้เพิ่ม id และหัวข้อแล้วรันใหม่
+  - Pick a card ดึงทุกบทความที่แบ่งเป็น "กอง 1/2/3" อัตโนมัติ (ตัดคำถามที่ผูกกับช่วงเวลาออก) คำถามประจำวันเปลี่ยนทุกวันตามลำดับ
+- ตัวเลขศาสตร์และสีประจำวันเกิดอยู่ใน `apps/web/src/lib/horoscope-data.ts`
+
 ## Cutover (ย้ายโดเมนจริง)
 
 1. งดแก้ไขใน WordPress

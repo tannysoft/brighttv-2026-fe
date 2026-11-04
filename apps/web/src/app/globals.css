@@ -196,3 +196,9 @@ a {
 /* Hide scrollbar utility */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Horoscope snippets from articles (/horoscope): plain paragraphs and lists */
+.horo-text p + p, .horo-text p + ul, .horo-text ul + p { margin-top: 0.5rem; }
+.horo-text ul { list-style: disc; padding-left: 1.1rem; }
+.horo-text li + li { margin-top: 0.25rem; }
+.horo-text strong { font-weight: 700; }

@@ -1,5 +1,5 @@
 // Data for the /horoscope page. Tag ids are WordPress tag ids (kept by the
-// Payload import). Short texts (tarot, numerology) are general meanings for
+// Payload import). Short numerology texts are general meanings for
 // entertainment — the horoscope desk can edit them here.
 
 export const HOROSCOPE_TAGS = {
@@ -46,33 +46,6 @@ export const dayColorOf = (weekday: number): DayColor => {
   const key = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][weekday];
   return DAY_COLORS.find((d) => d.key === key) ?? DAY_COLORS[0];
 };
-
-export type TarotCard = { no: number; en: string; th: string; meaning: string };
-/** The 22 major arcana, upright meanings. */
-export const TAROT: TarotCard[] = [
-  { no: 0, en: "The Fool", th: "คนโง่", meaning: "การเริ่มต้นใหม่ อิสระ กล้าลองสิ่งที่ไม่เคยทำ" },
-  { no: 1, en: "The Magician", th: "นักมายากล", meaning: "ความสามารถพร้อม ลงมือทำได้เลย สิ่งที่ตั้งใจมีโอกาสสำเร็จ" },
-  { no: 2, en: "The High Priestess", th: "นักบวชหญิง", meaning: "ฟังเสียงภายใน เชื่อสัญชาตญาณ มีเรื่องที่ยังไม่ถูกเปิดเผย" },
-  { no: 3, en: "The Empress", th: "จักรพรรดินี", meaning: "ความอุดมสมบูรณ์ ความรักความอบอุ่น งานสร้างสรรค์ไปได้ดี" },
-  { no: 4, en: "The Emperor", th: "จักรพรรดิ", meaning: "ความมั่นคง ความเป็นผู้นำ วางแผนอย่างมีระเบียบ" },
-  { no: 5, en: "The Hierophant", th: "พระสังฆราช", meaning: "คำแนะนำจากผู้ใหญ่ การเรียนรู้ ทำตามแบบแผนจะปลอดภัย" },
-  { no: 6, en: "The Lovers", th: "คนรัก", meaning: "ความรักและความสัมพันธ์ มีเรื่องต้องเลือกด้วยใจ" },
-  { no: 7, en: "The Chariot", th: "รถศึก", meaning: "ความมุ่งมั่นพาไปสู่ชัยชนะ การเดินทางหรือก้าวไปข้างหน้า" },
-  { no: 8, en: "Strength", th: "พลัง", meaning: "ความอดทนและความกล้า ใช้ความนุ่มนวลชนะใจคน" },
-  { no: 9, en: "The Hermit", th: "ฤๅษี", meaning: "เวลาทบทวนตัวเอง หาความสงบ คำตอบอยู่ข้างใน" },
-  { no: 10, en: "Wheel of Fortune", th: "กงล้อแห่งโชคชะตา", meaning: "จังหวะชีวิตกำลังเปลี่ยน โชคหมุนเข้าหา" },
-  { no: 11, en: "Justice", th: "ความยุติธรรม", meaning: "ความถูกต้องและสมดุล ตัดสินใจด้วยเหตุผล" },
-  { no: 12, en: "The Hanged Man", th: "คนแขวน", meaning: "ช่วงรอคอย ลองมองจากมุมใหม่แล้วจะเห็นทาง" },
-  { no: 13, en: "Death", th: "ความตาย", meaning: "สิ่งเก่าจบลงเพื่อเริ่มต้นสิ่งใหม่ การเปลี่ยนแปลงครั้งใหญ่" },
-  { no: 14, en: "Temperance", th: "ความพอดี", meaning: "ความสมดุล ใจเย็น ค่อยเป็นค่อยไปจะได้ผลดี" },
-  { no: 15, en: "The Devil", th: "ปีศาจ", meaning: "ระวังสิ่งล่อใจและสิ่งที่ยึดติด อย่าหลงกับสิ่งที่ง่ายเกินไป" },
-  { no: 16, en: "The Tower", th: "หอคอย", meaning: "เรื่องไม่คาดฝัน เตรียมรับมือการเปลี่ยนแปลงฉับพลัน" },
-  { no: 17, en: "The Star", th: "ดวงดาว", meaning: "ความหวังและแรงบันดาลใจ สิ่งดี ๆ กำลังมา" },
-  { no: 18, en: "The Moon", th: "ดวงจันทร์", meaning: "ความไม่แน่นอน อย่าเพิ่งด่วนสรุป ระวังข้อมูลที่ไม่ชัดเจน" },
-  { no: 19, en: "The Sun", th: "ดวงอาทิตย์", meaning: "ความสุข ความสำเร็จ พลังบวกเต็มเปี่ยม" },
-  { no: 20, en: "Judgement", th: "การพิพากษา", meaning: "โอกาสครั้งใหม่ ได้รับผลจากสิ่งที่ทำมา" },
-  { no: 21, en: "The World", th: "โลก", meaning: "ความสมบูรณ์ เป้าหมายสำเร็จ ปิดจบอย่างสวยงาม" },
-];
 
 /** Life-path number (1–9) traits. */
 export const NUMEROLOGY: Record<number, { title: string; text: string }> = {
