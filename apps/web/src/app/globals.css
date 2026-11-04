@@ -202,3 +202,36 @@ a {
 .horo-text ul { list-style: disc; padding-left: 1.1rem; }
 .horo-text li + li { margin-top: 0.25rem; }
 .horo-text strong { font-weight: 700; }
+
+/* Pick a card (/horoscope): deal, idle float, 3D flip, sparkles, reveal */
+.pc-card { perspective: 1000px; }
+.pc-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.pc-flipped .pc-inner { transform: rotateY(180deg) scale(1.06); }
+.pc-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 0.9rem; }
+.pc-front { transform: rotateY(180deg); }
+.pc-deal { animation: pc-deal 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: var(--d, 0s); }
+.pc-float { animation: pc-float 3.2s ease-in-out infinite; animation-delay: var(--f, 0s); }
+.pc-glow { animation: pc-glow 1.6s ease-in-out infinite; }
+.pc-spark { position: absolute; color: #f2c14e; pointer-events: none; animation: pc-spark 1.4s ease-out both; animation-delay: var(--d, 0s); }
+.pc-reveal { animation: pc-reveal 0.6s ease-out both; animation-delay: 0.45s; }
+.pc-shimmer { background-size: 200% 100%; animation: pc-shimmer 3s linear infinite; }
+@keyframes pc-deal {
+  from { opacity: 0; transform: translateY(-40px) rotate(var(--r, 0deg)) scale(0.7); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pc-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@keyframes pc-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(242, 193, 78, 0.0), 0 10px 30px -10px rgba(242, 193, 78, 0.6); }
+  50% { box-shadow: 0 0 0 6px rgba(242, 193, 78, 0.18), 0 14px 40px -8px rgba(242, 193, 78, 0.9); }
+}
+@keyframes pc-spark {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.3) rotate(0deg); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--x), var(--y)) scale(1.1) rotate(160deg); }
+}
+@keyframes pc-reveal { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes pc-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .pc-inner { transition: none; }
+  .pc-deal, .pc-float, .pc-glow, .pc-spark, .pc-reveal, .pc-shimmer { animation: none; }
+}

@@ -31,7 +31,9 @@ const safe =
     }
   };
 
-export type ProfileSection = { topic: string; html: string; title: string; path: string; author: string | null };
+export type ProfilePart = { html: string; title: string; path: string; author: string | null };
+/** One topic (e.g. "นิสัย"), with a part per article that covers it. */
+export type ProfileSection = { topic: string; parts: ProfilePart[] };
 export type ProfileKind = "day" | "zodiac";
 
 export const getProfile = safe(
@@ -40,10 +42,13 @@ export const getProfile = safe(
       const { results } = await (await db())
         .prepare("SELECT topic, html, title, path, author FROM horo_profile WHERE kind = ?1 AND key = ?2 ORDER BY sort")
         .bind(kind, key)
-        .all<ProfileSection>();
-      return results;
+        .all<ProfilePart & { topic: string }>();
+      // Same topic from several articles → one card, in article order.
+      const byTopic = new Map<string, ProfilePart[]>();
+      for (const { topic, ...part } of results) byTopic.set(topic, [...(byTopic.get(topic) ?? []), part]);
+      return [...byTopic].map(([topic, parts]) => ({ topic, parts }));
     },
-    ["horo-profile"],
+    ["horo-profile-v2"],
     { tags: ["horoscope"], revalidate: 86400 },
   ),
   [] as ProfileSection[],

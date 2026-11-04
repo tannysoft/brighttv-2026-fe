@@ -1,11 +1,12 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getPosts, type WPPost } from "@/lib/wp";
-import { getPostPath, stripHtml, timeAgoTH } from "@/lib/utils";
+import { getPostPath, stripHtml } from "@/lib/utils";
 import { pagePath } from "@/lib/categories";
 import { SITE_ORIGIN } from "@/lib/env";
 import { HOROSCOPE_TAGS, ZODIACS, dayColorOf } from "@/lib/horoscope-data";
 import ArticleCard from "@/components/ArticleCard";
+import HeroSideGrid from "@/components/HeroSideGrid";
 import SectionTitle from "@/components/SectionTitle";
 import JsonLd from "@/components/JsonLd";
 import NumerologyCalc from "@/components/horoscope/NumerologyCalc";
@@ -40,8 +41,8 @@ export default async function HoroscopePage() {
   const todayCard = todayCardId ? await getCard(todayCardId) : null;
   const [daily, weekly, monthly, love, money, latest, ...zodiacPosts] = await Promise.all([
     byTag(HOROSCOPE_TAGS.daily, 4),
-    byTag(HOROSCOPE_TAGS.weekly, 1),
-    byTag(HOROSCOPE_TAGS.monthly, 1),
+    byTag(HOROSCOPE_TAGS.weekly, 4),
+    byTag(HOROSCOPE_TAGS.monthly, 4),
     byTag(HOROSCOPE_TAGS.love, 4),
     byTag(HOROSCOPE_TAGS.money, 4),
     getPosts({ categories: CATEGORY_ID, perPage: 13 }),
@@ -56,6 +57,19 @@ export default async function HoroscopePage() {
 
   // Newest horoscope story leads (the daily/weekly tags aren't used on every story).
   const lead = latest[0] ?? daily[0];
+  // Weekly / monthly / daily beside the lead, never the same story twice.
+  const used = new Set<number>(lead ? [lead.id] : []);
+  const firstNew = (list: WPPost[]) => {
+    const p = list.find((x) => !used.has(x.id));
+    if (p) used.add(p.id);
+    return p;
+  };
+  const side = [
+    { label: "ดวงรายสัปดาห์", post: firstNew(weekly) },
+    { label: "ดวงรายเดือน", post: firstNew(monthly) },
+    { label: "ดวงรายวัน", post: firstNew(daily) },
+    { label: "ดวงความรัก", post: firstNew(love) },
+  ].filter((r) => r.post);
   const listed: WPPost[] = [...latest, ...daily].filter((p, i, a) => a.findIndex((q) => q.id === p.id) === i);
 
   return (
@@ -102,11 +116,7 @@ export default async function HoroscopePage() {
       {/* Daily reading + weekly/monthly */}
       <section className="grid gap-6 lg:grid-cols-3 mb-12">
         <div className="lg:col-span-2">{lead && <ArticleCard post={lead} variant="hero" priority />}</div>
-        <div className="space-y-4">
-          <ReadingLink label="ดวงรายสัปดาห์" post={weekly[0]} href={tagHref("ดวงรายสัปดาห์")} />
-          <ReadingLink label="ดวงรายเดือน" post={monthly[0]} href={tagHref("ดวงรายเดือน")} />
-          <ReadingLink label="ดวงรายวัน" post={daily[0]} href={tagHref("ดวงรายวัน")} />
-        </div>
+        <HeroSideGrid posts={side.map((r) => r.post!)} labels={side.map((r) => r.label)} />
       </section>
 
       {/* 12 signs */}
@@ -151,7 +161,7 @@ export default async function HoroscopePage() {
 
       {/* Love & money */}
       <div className="grid gap-10 lg:grid-cols-2 mb-12">
-        <Shelf title="ดวงความรัก" href={tagHref("ดวงความรัก")} posts={love} />
+        <Shelf title="ดวงความรัก" href={tagHref("ดวงความรัก")} posts={love.filter((p) => !used.has(p.id))} />
         <Shelf title="ดวงการเงิน" href={tagHref("ดวงการเงิน")} posts={money} />
       </div>
 
@@ -172,26 +182,6 @@ export default async function HoroscopePage() {
           </Link>
         </div>
       </section>
-    </div>
-  );
-}
-
-function ReadingLink({ label, post, href }: { label: string; post?: WPPost; href: string }) {
-  return (
-    <div className="rounded-2xl border border-[var(--bt-line)] bg-white p-4">
-      <Link href={href} className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--bt-red)] hover:underline">
-        {label} ›
-      </Link>
-      {post ? (
-        <>
-          <Link href={getPostPath(post)} className="mt-1 block font-bold leading-snug text-[var(--bt-navy)] line-clamp-2 hover:text-[var(--bt-red)]">
-            {stripHtml(post.title.rendered)}
-          </Link>
-          <p className="mt-1 text-[11px] text-[var(--bt-muted)]">{timeAgoTH(post.date)}</p>
-        </>
-      ) : (
-        <p className="mt-1 text-sm text-[var(--bt-muted)]">—</p>
-      )}
     </div>
   );
 }

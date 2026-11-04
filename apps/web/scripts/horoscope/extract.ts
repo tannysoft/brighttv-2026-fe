@@ -104,7 +104,7 @@ function clean(html: string): string {
     .replace(/<(?!\/?(p|ul|ol|li|strong|b|em|br)\b)[^>]+>/gi, "")
     .replace(/&nbsp;/g, " ");
   // Outro / credit paragraphs
-  h = h.replace(/<p>(?:(?!<\/p>)[\s\S])*?(ที่มา|ขอบคุณ|ติดตามได้ที่|Brighttv|BRIGHT TV|โปรดใช้วิจารณญาณ)(?:(?!<\/p>)[\s\S])*?<\/p>/gi, "");
+  h = h.replace(/<p>(?:(?!<\/p>)[\s\S])*?(ที่มา|ขอบคุณ|ติดตามได้ที่|ติดตามข่าวสาร|ช่องทางอื่น|Brighttv|Bright ?TV|Bright Today|โปรดใช้วิจารณญาณ)(?:(?!<\/p>)[\s\S])*?<\/p>/gi, "");
   h = h.replace(/<(p|li)>\s*<\/\1>/g, "").replace(/<ul>\s*<\/ul>/g, "").replace(/\s+/g, " ").trim();
   return h;
 }
