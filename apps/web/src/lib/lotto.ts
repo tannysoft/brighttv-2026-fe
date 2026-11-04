@@ -3,7 +3,7 @@
 // "lotto" tag, which the job refreshes through /api/revalidate on new results.
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { unstable_cache } from "next/cache";
-import { checkTicket, type LottoDraw, type TicketWin } from "./lotto-check";
+import type { LottoDraw } from "./lotto-check";
 
 type D1 = {
   prepare: (sql: string) => {
@@ -63,31 +63,3 @@ const datesCached = unstable_cache(
 );
 /** Every draw date, newest first. */
 export const getDrawDates = safe(datesCached, [] as string[]);
-
-export type HistoryWin = { date: string; wins: TicketWin[]; total: number };
-
-/** Every past draw a 6-digit ticket would have won, newest first. */
-export async function findWins(ticket: string): Promise<HistoryWin[]> {
-  if (!/^\d{6}$/.test(ticket)) return [];
-  const d = await db().catch(() => null);
-  if (!d) return [];
-  // Narrow in SQL (numbers are stored as JSON strings), then check exactly.
-  const parts = [ticket, ticket.slice(0, 3), ticket.slice(-3), ticket.slice(-2)].map((p) => `%"${p}"%`);
-  const { results } = await d
-    .prepare("SELECT data FROM lotto_draws WHERE data LIKE ?1 OR data LIKE ?2 OR data LIKE ?3 OR data LIKE ?4 ORDER BY date DESC")
-    .bind(...parts)
-    .all<{ data: string }>();
-  const out: HistoryWin[] = [];
-  for (const row of results) {
-    let draw: LottoDraw | null = null;
-    try {
-      draw = parse(row);
-    } catch {
-      continue;
-    }
-    if (!draw) continue;
-    const wins = checkTicket(draw, ticket);
-    if (wins.length) out.push({ date: draw.date, wins, total: wins.reduce((s, w) => s + w.reward, 0) });
-  }
-  return out;
-}

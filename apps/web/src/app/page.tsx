@@ -2,9 +2,7 @@ import Link from "next/link";
 import {
   getLottoLatest,
   getMostViewPosts,
-  getPopularTags,
   getPosts,
-  getTopTags,
 } from "@/lib/wp";
 import { breadcrumbSchema } from "@/lib/schema";
 import JsonLd from "@/components/JsonLd";
@@ -24,6 +22,7 @@ import SectionTitle from "@/components/SectionTitle";
 import CategorySection from "@/components/CategorySection";
 import CategoryColumnSection from "@/components/CategoryColumnSection";
 import BreakingTicker from "@/components/BreakingTicker";
+import SocialTrend from "@/components/SocialTrend";
 import { HOMEPAGE_SECTIONS } from "@/lib/categories";
 
 // ISR: render once, cache for 5 minutes, revalidate in background.
@@ -120,8 +119,8 @@ export default async function HomePage() {
         {/* Video section */}
         <VideoSection posts={videoPosts} />
 
-        {/* Popular tags */}
-        <PopularTags />
+        {/* Social Trend (replaces the plain popular-tags cloud) */}
+        <SocialTrend />
       </div>
     </>
   );
@@ -517,54 +516,3 @@ function VideoSection({ posts }: { posts: import("@/lib/wp").WPPost[] }) {
   );
 }
 
-async function PopularTags() {
-  // Merge two tag sources in parallel:
-  //   1. `contents/v1/top-tags?is_home=true` → trending tags across recent
-  //      homepage-visible posts (fresh, contextual — ranked first)
-  //   2. `wp/v2/tags?orderby=count` → all-time popular tags (stable filler
-  //      for categories the trending feed didn't cover today)
-  // Dedupe by slug (case-insensitive) and keep the first occurrence so the
-  // trending list wins ordering when a tag appears in both lists.
-  const [trending, allTime] = await Promise.all([
-    getTopTags({ isHome: true }),
-    getPopularTags(20),
-  ]);
-
-  const seen = new Set<string>();
-  type MergedTag = { key: string | number; name: string; slug: string };
-  const merged: MergedTag[] = [];
-
-  for (const t of trending) {
-    const k = t.slug.toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    merged.push({ key: `top-${t.id}`, name: t.name, slug: t.slug });
-  }
-  for (const t of allTime) {
-    const k = t.slug.toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    merged.push({ key: `wp-${t.id}`, name: t.name, slug: t.slug });
-  }
-
-  if (!merged.length) return null;
-  const display = merged.slice(0, 30);
-
-  return (
-    <section className="mt-14">
-      <SectionTitle title="แท็กยอดนิยม" />
-      <div className="flex flex-wrap gap-2">
-        {display.map((t) => (
-          <Link
-            key={t.key}
-            href={`/tag/${t.slug}`}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-[var(--bt-bg)] border border-[var(--bt-line)] text-sm font-semibold text-[var(--bt-navy)] hover:bg-[var(--bt-navy)] hover:!text-white hover:border-[var(--bt-navy)] transition-colors"
-          >
-            <span className="text-[var(--bt-red)]">#</span>
-            {t.name}
-          </Link>
-        ))}
-      </div>
-    </section>
-  );
-}

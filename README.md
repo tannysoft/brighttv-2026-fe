@@ -144,7 +144,7 @@ pnpm --filter @brighttv/web run deploy   # SITE_NOINDEX=1 ใน wrangler.jsonc 
 ## ผลสลาก (`/lotto`)
 
 - `apps/lotto` (worker `brighttv-lotto`) เช็ก API ของสำนักงานสลากฯ ทุก 10 นาที ช่วง 14:00–18:59 น. ทุกวัน แล้วเก็บแต่ละงวดลง D1 `brighttv-lotto` (ตาราง `lotto_draws` หนึ่งแถวต่องวด) เขียนเฉพาะเมื่อมีงวดใหม่หรือผลเปลี่ยน แล้วยิง `/api/revalidate` (tag `lotto`) ให้เว็บอัปเดตทันที
-- เว็บอ่านจาก D1 อย่างเดียว ไม่เรียก API ของสลากฯ เอง: `/lotto` งวดล่าสุด, `/lotto/01-11-2569` แต่ละงวด (รูปแบบเดียวกับ URL เดิมของ WordPress), ตรวจเลขกับงวดที่เปิดอยู่ และ `/api/lotto/check?n=123456` ตรวจย้อนหลังทุกงวด
+- เว็บอ่านจาก D1 อย่างเดียว ไม่เรียก API ของสลากฯ เอง: `/lotto` งวดล่าสุด, `/lotto/01-11-2569` แต่ละงวด (รูปแบบเดียวกับ URL เดิมของ WordPress), ตรวจเลขกับงวดที่เปิดอยู่ และเลือกงวดย้อนหลังได้จาก sidebar
 - ข้อมูลย้อนหลังตั้งแต่ มี.ค. 2553 (398 งวด ณ พ.ย. 2569) ดึงครั้งเดียวด้วย `pnpm --filter @brighttv/lotto run backfill` (รันซ้ำได้ ทับของเดิม)
 - secret `REVALIDATE_SECRET` ของ `brighttv-lotto` ต้องตรงกับของ `brighttv-web`
 - ทดสอบ job บนเครื่อง: `pnpm --filter @brighttv/lotto run dev` แล้วเปิด `http://localhost:8787/__scheduled`

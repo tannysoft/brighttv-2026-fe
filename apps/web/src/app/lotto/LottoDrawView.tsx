@@ -4,7 +4,6 @@ import ArticleCard from "@/components/ArticleCard";
 import SectionTitle from "@/components/SectionTitle";
 import JsonLd from "@/components/JsonLd";
 import LottoChecker from "@/components/LottoChecker";
-import LottoHistoryChecker from "@/components/LottoHistoryChecker";
 import DrawPicker from "@/components/DrawPicker";
 import { breadcrumbSchema, collectionPageSchema } from "@/lib/schema";
 import { drawSlug, prize, rewardOf, thaiDate, type LottoDraw } from "@/lib/lotto-check";
@@ -160,13 +159,12 @@ export default function LottoDrawView({
       </section>
 
       {/* Checker sidebar */}
-      <div className="lg:col-span-1 space-y-6">
+      {/* Sticky on desktop, under the collapsed header */}
+      <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-[76px] lg:self-start">
         <LottoChecker draw={draw} />
-        <LottoHistoryChecker />
+        <DrawArchive dates={dates} current={draw?.date ?? null} />
       </div>
       </div>
-
-      <DrawArchive dates={dates} current={draw?.date ?? null} />
 
       {/* Lottery articles */}
       {lottoPosts.length > 0 && (
@@ -210,46 +208,34 @@ export default function LottoDrawView({
   );
 }
 
-/** Every stored draw, grouped by Buddhist year, newest first (links help search engines too). */
+/** Past results: pick year + draw, plus links to the latest few draws. */
 function DrawArchive({ dates, current }: { dates: string[]; current: string | null }) {
   if (!dates.length) return null;
-  const years = new Map<number, string[]>();
-  for (const d of dates) {
-    const y = Number(d.slice(0, 4)) + 543;
-    years.set(y, [...(years.get(y) ?? []), d]);
-  }
   return (
-    <section className="mt-12">
-      <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
-        <SectionTitle title="ผลสลากย้อนหลัง" />
-        <DrawPicker dates={dates} current={current} />
-      </div>
-      <div className="space-y-2">
-        {[...years.entries()].map(([year, list], i) => (
-          <details key={year} open={i === 0} className="rounded-xl border border-[var(--bt-line)] bg-white">
-            <summary className="cursor-pointer px-4 py-3 font-extrabold text-[var(--bt-navy)]">
-              ปี {year} <span className="text-xs font-semibold text-[var(--bt-muted)]">({list.length} งวด)</span>
-            </summary>
-            <ul className="px-4 pb-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-              {list.map((d) => (
-                <li key={d}>
-                  <Link
-                    href={`/lotto/${drawSlug(d)}`}
-                    aria-current={d === current ? "page" : undefined}
-                    className={`block rounded-md border px-2 py-1.5 text-center text-sm font-semibold ${
-                      d === current
-                        ? "bg-[var(--bt-navy)] border-[var(--bt-navy)] !text-white"
-                        : "border-[var(--bt-line)] text-[var(--bt-text)] hover:border-[var(--bt-red)] hover:text-[var(--bt-red)]"
-                    }`}
-                  >
-                    {thaiDate(d, "short")}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </details>
+    <section className="rounded-2xl bg-white border border-[var(--bt-line)] shadow-sm p-5">
+      <h2 className="text-lg font-extrabold text-[var(--bt-navy)]">ผลสลากย้อนหลัง</h2>
+      <p className="mt-0.5 text-[11px] text-[var(--bt-muted)]">
+        ตั้งแต่ปี {Number(dates[dates.length - 1].slice(0, 4)) + 543} · {dates.length} งวด
+      </p>
+      <DrawPicker dates={dates} current={current} />
+      <p className="mt-4 mb-2 text-[11px] font-bold text-[var(--bt-muted)]">งวดล่าสุด</p>
+      <ul className="grid grid-cols-3 gap-1.5">
+        {dates.slice(0, 6).map((d) => (
+          <li key={d}>
+            <Link
+              href={`/lotto/${drawSlug(d)}`}
+              aria-current={d === current ? "page" : undefined}
+              className={`block rounded-lg py-2 text-center text-[13px] font-semibold transition-colors ${
+                d === current
+                  ? "bg-[var(--bt-navy)] !text-white"
+                  : "bg-[var(--bt-bg)] text-[var(--bt-text)] hover:bg-[var(--bt-red)] hover:!text-white"
+              }`}
+            >
+              {thaiDate(d, "short")}
+            </Link>
+          </li>
         ))}
-      </div>
+      </ul>
     </section>
   );
 }
