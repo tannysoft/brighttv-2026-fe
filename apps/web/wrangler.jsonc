@@ -24,8 +24,8 @@
   //   { "pattern": "brighttv.co.th", "custom_domain": true }
   // ],
   "vars": {
-    // "wordpress" = old API (rollback switch)
-    "CMS_SOURCE": "payload",
+    // "wordpress" until the CMS is live with imported content; then "payload".
+    "CMS_SOURCE": "wordpress",
     // Remove at cutover (robots + X-Robots-Tag noindex on the preview host)
     "SITE_NOINDEX": "1",
     "SITE_ORIGIN": "https://www.brighttv.co.th",
@@ -46,12 +46,12 @@
     {
       "binding": "NEXT_TAG_CACHE_D1",
       "database_name": "brighttv-web-tags",
-      "database_id": "REPLACE_WITH_D1_ID_TAGS"
+      "database_id": "cb884a91-4886-43a1-94ef-a6e78efc67b8"
     },
     {
       "binding": "VIEWS_DB",
       "database_name": "brighttv-web-views",
-      "database_id": "REPLACE_WITH_D1_ID_VIEWS",
+      "database_id": "1ae8e398-96f0-4944-b250-9371ed54f4e4",
       "migrations_dir": "migrations"
     }
   ],
