@@ -43,7 +43,7 @@ export default async function HoroscopePage() {
     byTag(HOROSCOPE_TAGS.daily, 4),
     byTag(HOROSCOPE_TAGS.weekly, 4),
     byTag(HOROSCOPE_TAGS.monthly, 4),
-    byTag(HOROSCOPE_TAGS.love, 4),
+    byTag(HOROSCOPE_TAGS.love, 5), // one may sit in the hero side column
     byTag(HOROSCOPE_TAGS.money, 4),
     getPosts({ categories: CATEGORY_ID, perPage: 13 }),
     ...ZODIACS.map((z) => byTag(z.tag, 1)),
@@ -154,14 +154,16 @@ export default async function HoroscopePage() {
 
       {/* Pick a card (archive of tarot readers' spreads) + numerology */}
       <section className="mb-4 grid gap-4 lg:grid-cols-3 items-start">
-        <div className="lg:col-span-2">{todayCard && <PickACard initial={todayCard} />}</div>
+        <div className="lg:col-span-2">
+          <PickACard initial={todayCard} />
+        </div>
         <NumerologyCalc />
       </section>
       <p className="mb-12 text-[11px] text-[var(--bt-muted)]">* คำทำนาย ไพ่ และเลขศาสตร์ เป็นความเชื่อส่วนบุคคล โปรดใช้วิจารณญาณ</p>
 
       {/* Love & money */}
       <div className="grid gap-10 lg:grid-cols-2 mb-12">
-        <Shelf title="ดวงความรัก" href={tagHref("ดวงความรัก")} posts={love.filter((p) => !used.has(p.id))} />
+        <Shelf title="ดวงความรัก" href={tagHref("ดวงความรัก")} posts={love.filter((p) => !used.has(p.id)).slice(0, 4)} />
         <Shelf title="ดวงการเงิน" href={tagHref("ดวงการเงิน")} posts={money} />
       </div>
 

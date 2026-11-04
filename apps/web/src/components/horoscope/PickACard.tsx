@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { PickCard } from "@/lib/horoscope";
 
 // Sparkles that burst from the chosen card: [x, y] offsets in px.
@@ -14,16 +14,26 @@ const SPARKS: Array<[number, number]> = [
  * face-down and float while you choose; the chosen one flips over with a
  * burst of sparkles and its reading fades in. ("คำถามอื่น" deals again.)
  */
-export default function PickACard({ initial }: { initial: PickCard }) {
+export default function PickACard({ initial }: { initial: PickCard | null }) {
   const [card, setCard] = useState(initial);
   const [picked, setPicked] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [round, setRound] = useState(0); // re-deals the cards
 
+  // The page may have been rendered without data (e.g. prerendered at build):
+  // load today's question in the browser.
+  useEffect(() => {
+    if (card) return;
+    fetch("/api/horoscope/card?today=1")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { card?: PickCard } | null) => d?.card && setCard(d.card))
+      .catch(() => {});
+  }, [card]);
+
   const another = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/horoscope/card?not=${card.id}`);
+      const res = await fetch(`/api/horoscope/card?not=${card?.id ?? ""}`);
       if (res.ok) {
         setCard(((await res.json()) as { card: PickCard }).card);
         setPicked(null);
@@ -39,6 +49,9 @@ export default function PickACard({ initial }: { initial: PickCard }) {
     setRound((r) => r + 1);
   };
 
+  if (!card) {
+    return <section className="min-h-[420px] animate-pulse rounded-2xl bg-gradient-to-br from-[#2b1b4d] via-[#1d1238] to-[#0d0820]" aria-busy />;
+  }
   const n = card.piles.length;
   const pile = picked !== null ? card.piles[picked] : null;
 
