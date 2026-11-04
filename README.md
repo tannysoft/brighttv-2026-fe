@@ -6,6 +6,7 @@ Monorepo ของเว็บไซต์และระบบจัดกา�
 | --- | --- | --- |
 | `apps/web` | เว็บไซต์ข่าว (Next.js 16) | Cloudflare Workers ผ่าน OpenNext |
 | `apps/cms` | Payload CMS 3 ระบบหลังบ้านแทน WordPress | Cloudflare Workers + PlanetScale Postgres (ผ่าน Hyperdrive) + R2 (ไฟล์สื่อ) |
+| `apps/lotto` | job ดึงผลสลากจากสำนักงานสลากฯ เก็บลง D1 | Cloudflare Workers (Cron Triggers) + D1 |
 
 ```
 packages/
@@ -140,9 +141,17 @@ pnpm --filter @brighttv/web run deploy   # SITE_NOINDEX=1 ใน wrangler.jsonc 
 แทนปลั๊กอิน seed-stat: หน้าข่าวส่ง beacon ไป `/api/views` นับรายชั่วโมงใน D1 `brighttv-web-views` และจัดอันดับย้อนหลัง 48 ชั่วโมง
 ช่วงแรกที่ยังมีข้อมูลน้อย จะใช้รายการจาก WordPress เดิม (ถ้ายังเปิดอยู่) แล้วค่อยเป็นข่าวล่าสุด
 
+## ผลสลาก (`/lotto`)
+
+- `apps/lotto` (worker `brighttv-lotto`) เช็ก API ของสำนักงานสลากฯ ทุก 10 นาที ช่วง 14:00–18:59 น. ทุกวัน แล้วเก็บแต่ละงวดลง D1 `brighttv-lotto` (ตาราง `lotto_draws` หนึ่งแถวต่องวด) เขียนเฉพาะเมื่อมีงวดใหม่หรือผลเปลี่ยน แล้วยิง `/api/revalidate` (tag `lotto`) ให้เว็บอัปเดตทันที
+- เว็บอ่านจาก D1 อย่างเดียว ไม่เรียก API ของสลากฯ เอง: `/lotto` งวดล่าสุด, `/lotto/01-11-2569` แต่ละงวด (รูปแบบเดียวกับ URL เดิมของ WordPress), ตรวจเลขกับงวดที่เปิดอยู่ และ `/api/lotto/check?n=123456` ตรวจย้อนหลังทุกงวด
+- ข้อมูลย้อนหลังตั้งแต่ มี.ค. 2553 (398 งวด ณ พ.ย. 2569) ดึงครั้งเดียวด้วย `pnpm --filter @brighttv/lotto run backfill` (รันซ้ำได้ ทับของเดิม)
+- secret `REVALIDATE_SECRET` ของ `brighttv-lotto` ต้องตรงกับของ `brighttv-web`
+- ทดสอบ job บนเครื่อง: `pnpm --filter @brighttv/lotto run dev` แล้วเปิด `http://localhost:8787/__scheduled`
+
 ## Cutover (ย้ายโดเมนจริง)
 
 1. งดแก้ไขใน WordPress
 2. `pnpm migrate:wp --since=<วันที่ย้ายรอบแรก>` (ชี้ `DATABASE_URL` ไปที่ PlanetScale)
-3. `apps/web/wrangler.jsonc`: เปิด routes `www.brighttv.co.th` / `brighttv.co.th`, ลบ `SITE_NOINDEX`; `apps/cms/wrangler.jsonc`: `WEB_URL=https://www.brighttv.co.th` แล้ว deploy ทั้งสองแอป (deploy ใหม่ได้ build ID ใหม่ หน้าที่ cache ไว้ตอนยัง noindex จะไม่ถูกใช้ต่อ)
+3. `apps/web/wrangler.jsonc`: เปิด routes `www.brighttv.co.th` / `brighttv.co.th`, ลบ `SITE_NOINDEX`; `apps/cms/wrangler.jsonc` และ `apps/lotto/wrangler.jsonc`: `WEB_URL=https://www.brighttv.co.th` แล้ว deploy ทุกแอป (deploy ใหม่ได้ build ID ใหม่ หน้าที่ cache ไว้ตอนยัง noindex จะไม่ถูกใช้ต่อ)
 4. ส่ง sitemap ใหม่ใน Search Console

@@ -18,10 +18,14 @@ const nextConfig: NextConfig = {
         destination: "https://cdn.brighttv.co.th/wp-content/uploads/:path*",
         permanent: true,
       },
-      // WordPress feeds/pagination that no longer exist.
-      { source: "/feed", destination: "/", permanent: true },
+      // WordPress search URL → our search page.
+      { source: "/", has: [{ type: "query", key: "s", value: "(?<s>.*)" }], destination: "/search?q=:s", permanent: true },
+      // WordPress pagination URLs → ?page=N (feeds are served by app/**/feed/route.ts).
       { source: "/category/:slug/page/:n(\\d+)", destination: "/category/:slug?page=:n", permanent: true },
       { source: "/tag/:slug/page/:n(\\d+)", destination: "/tag/:slug?page=:n", permanent: true },
+      // Old WordPress lottery posts: /lottery/01-08-2564 → that draw; others → latest.
+      { source: "/lottery/:d(\\d{2}-\\d{2}-\\d{4})", destination: "/lotto/:d", permanent: true },
+      { source: "/lottery/:slug*", destination: "/lotto", permanent: true },
     ];
   },
 
@@ -53,9 +57,20 @@ const nextConfig: NextConfig = {
   // Without these, every request triggers full SSR (~1.5-2.6s). With them,
   // Cloudflare serves cached HTML for most visitors (~50ms TTFB).
   async headers() {
+    // When several rules match a path and set the same key, the LAST one
+    // wins — so the generic catch-all comes first and specific paths after.
     return [
-      // API responses (views, revalidate, preview, goto) are never shared-cached.
-      { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "private, no-store" }] },
+      {
+        // Article and other pages: longer cache since content rarely changes.
+        // (Not /api, nor feeds/sitemaps, which set their own Cache-Control.)
+        source: "/:path((?!api/|_next/)(?!.*\\.xml$)(?!(?:.*/)?feed$).*)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=300, stale-while-revalidate=3600",
+          },
+        ],
+      },
       {
         // Homepage: short cache since content changes frequently
         source: "/",
@@ -67,8 +82,8 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Category pages: medium cache
-        source: "/category/:slug*",
+        // Category pages: medium cache (the feed sets its own)
+        source: "/category/:slug",
         headers: [
           {
             key: "Cache-Control",
@@ -77,8 +92,8 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Tag pages
-        source: "/tag/:slug*",
+        // Tag pages (the feed sets its own)
+        source: "/tag/:slug",
         headers: [
           {
             key: "Cache-Control",
@@ -86,16 +101,9 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      {
-        // Article pages: longer cache since content rarely changes (not /api)
-        source: "/:path((?!api/).*)",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, s-maxage=300, stale-while-revalidate=3600",
-          },
-        ],
-      },
+      // API responses (views, revalidate, preview, goto) are never shared-cached.
+      // (Sitemaps are rewritten to /api/sitemap but matched by their public .xml URL.)
+      { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "private, no-store" }] },
     ];
   },
 

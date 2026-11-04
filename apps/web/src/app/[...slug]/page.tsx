@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -175,6 +175,15 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
   const post = await getPostBySlug(pickSlug(slug), slug[0]);
   if (!post) notFound();
 
+  // Only the last segment picks the story, so /anything/else/{slug} would
+  // render it too: send those to the story's real path. Compared decoded so
+  // %E0 vs %e0 (WordPress uses lowercase) doesn't cause a redirect loop.
+  // (/lottery/* is handled separately.)
+  const articlePath = getPostPath(post);
+  if (slug[0] !== "lottery" && safeDecode(articlePath) !== "/" + slug.map(safeDecode).join("/")) {
+    permanentRedirect(articlePath);
+  }
+
   const title = stripHtml(post.title.rendered);
   const img = getFeaturedImage(post, "full");
   const youtubeId = getYoutubeId(post);
@@ -196,8 +205,7 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
   // frozen into the cached HTML until `revalidate` expires.
   const latest = pickRandom(sidebar.latest, 4).map(sidebarPostToWPPost);
 
-  // Canonical path from WP's pathname (e.g. /social-news/indictment-…)
-  const articlePath = getPostPath(post);
+  // (articlePath above: canonical path from WP's pathname, e.g. /social-news/indictment-…)
 
   // Prefer the GMT timestamps from WP so we can append a strict `Z` suffix
   // — Google's Rich Results validator flags naked site-local datetimes as

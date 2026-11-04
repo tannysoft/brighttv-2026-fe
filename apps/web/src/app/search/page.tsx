@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getPosts } from "@/lib/wp";
+import { parsePageParam } from "@/lib/utils";
 import ArticleCard from "@/components/ArticleCard";
 import SectionTitle from "@/components/SectionTitle";
 
@@ -17,7 +18,8 @@ export default async function SearchPage({
 }) {
   const sp = await searchParams;
   const q = (sp.q || "").trim();
-  const page = Math.max(1, Number(sp.page || "1"));
+  // Garbage (?page=abc) falls back to page 1 rather than producing NaN links.
+  const page = parsePageParam(sp.page) ?? 1;
 
   const posts = q ? await getPosts({ search: q, perPage: 16, page }) : [];
   const hasNext = posts.length === 16;

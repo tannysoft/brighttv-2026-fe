@@ -298,6 +298,22 @@ export async function getPosts(q: PostQuery = {}): Promise<WPPost[]> {
   return (await findPosts(q)).data;
 }
 
+/**
+ * `limit` posts starting at `offset` + the total count. Payload pages by
+ * `page`, so read the (at most two) pages of size `limit` that cover the window.
+ */
+export async function findPostsWindow(
+  q: Omit<PostQuery, "perPage" | "page"> & { offset: number; limit: number },
+): Promise<{ posts: WPPost[]; total: number }> {
+  const { offset, limit, ...rest } = q;
+  const first = Math.floor(offset / limit) + 1;
+  const skip = offset % limit;
+  const a = await findPosts({ ...rest, perPage: limit, page: first });
+  let docs = a.data;
+  if (skip > 0 && first < a.totalPages) docs = docs.concat((await findPosts({ ...rest, perPage: limit, page: first + 1 })).data);
+  return { posts: docs.slice(skip, skip + limit), total: a.total };
+}
+
 /** A story by slug; in draft mode (CMS preview) the latest saved version, drafts included. */
 export async function getPostBySlug(slug: string): Promise<CMSPost | null> {
   const decoded = safeDecode(slug);

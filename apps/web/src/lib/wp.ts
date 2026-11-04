@@ -2,6 +2,8 @@
 // Payload CMS when CMS_SOURCE=payload (./payload.ts returns the same shapes).
 // This file holds ONLY type definitions and network fetchers. All pure
 // conversion/formatting helpers live in `@/lib/utils`.
+import { getLatestDraw } from "./lotto";
+import { thaiDate } from "./lotto-check";
 import { CMS_SOURCE, SITE_ORIGIN, WP_API_ORIGIN } from "./env";
 import * as cms from "./payload";
 import { topViewedIds } from "./views";
@@ -297,6 +299,97 @@ export async function getPosts(params: {
   return data ?? [];
 }
 
+/**
+ * A window of posts by OFFSET plus the total matching count, for listings
+ * whose first page is bigger than the rest (category/author: 17 then 12).
+ */
+export async function getPostsWindow(params: {
+  offset: number;
+  limit: number;
+  categories?: number;
+  author?: number;
+  tagSlug?: string;
+}): Promise<{ posts: WPPost[]; total: number }> {
+  if (usePayload) return cms.findPostsWindow(params);
+  const sp = new URLSearchParams();
+  sp.set("per_page", String(params.limit));
+  if (params.offset > 0) sp.set("offset", String(params.offset));
+  if (params.categories) sp.set("categories", String(params.categories));
+  if (params.author) sp.set("author", String(params.author));
+  if (params.tagSlug) sp.set("tag_slug", params.tagSlug);
+  const url = `${CONTENTS_BASE}/posts?${sp.toString()}`;
+  try {
+    const res = await fetch(url, {
+      cache: isDev ? "no-store" : "force-cache",
+      ...(!isDev && { next: { revalidate: REVALIDATE } }),
+      headers: WP_FETCH_HEADERS,
+    });
+    if (!res.ok) {
+      // eslint-disable-next-line no-console
+      console.error(`[getPostsWindow] ${res.status} ${res.statusText} ${url}`);
+      return { posts: [], total: 0 };
+    }
+    const posts = (await res.json()) as WPPost[];
+    const total = parseInt(res.headers.get("x-wp-total") || "", 10);
+    return { posts: Array.isArray(posts) ? posts : [], total: Number.isFinite(total) ? total : posts.length };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[getPostsWindow] threw ${err instanceof Error ? err.message : err} ${url}`);
+    return { posts: [], total: 0 };
+  }
+}
+
+/** Raw /wp/v2 item of a page or a custom post type (program). */
+type WPV2Item = Omit<Partial<WPPost>, "id" | "featured_media"> & {
+  id: number | string;
+  featured_media?: number | string;
+};
+
+/** Shape a /wp/v2/{pages,program} item (fetched with _embed) like a contents/v1 post. */
+function v2ToPost(raw: WPV2Item, pathname: string): WPPost {
+  return {
+    ...raw,
+    id: Number(raw.id),
+    date: raw.date ?? "",
+    modified: raw.modified ?? raw.date ?? "",
+    slug: raw.slug ?? "",
+    link: `${SITE_ORIGIN}${pathname}`,
+    pathname,
+    title: raw.title ?? { rendered: "" },
+    excerpt: raw.excerpt ?? { rendered: "" },
+    content: raw.content ?? { rendered: "" },
+    author: Number(raw.author ?? 0),
+    featured_media: Number(raw.featured_media ?? 0),
+    categories: [],
+    tags: [],
+    primary_category: undefined,
+  };
+}
+
+function pathOf(link: string | undefined): string | null {
+  if (!link) return null;
+  try {
+    return new URL(link).pathname.replace(/\/$/, "") || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Site path of a post/page/program by WordPress id (for /?p=ID short links). */
+export async function getPostPathById(id: number): Promise<string | null> {
+  if (!Number.isInteger(id) || id <= 0) return null;
+  if (usePayload) return cms.getPostPathById(id);
+  const posts = await apiFetch<WPPost[]>(`${CONTENTS_BASE}/posts?include=${id}&per_page=1`);
+  const post = posts?.find((p) => Number(p.id) === id);
+  if (post) return post.pathname?.startsWith("/") ? post.pathname.replace(/\/$/, "") : pathOf(post.link);
+  for (const type of ["pages", "program"]) {
+    const item = await apiFetch<{ id: number; link?: string }>(`${WP_V2_BASE}/${type}/${id}?_fields=id,link`);
+    const path = pathOf(item?.link);
+    if (path) return path;
+  }
+  return null;
+}
+
 /** `section`: first URL segment — /program/{slug} and /lottery/{slug} are their own types in the CMS. */
 export async function getPostBySlug(slug: string, section?: string): Promise<(WPPost & { _seo?: cms.CMSPost["_seo"] }) | null> {
   if (usePayload) {
@@ -306,8 +399,21 @@ export async function getPostBySlug(slug: string, section?: string): Promise<(WP
   }
   const sp = new URLSearchParams();
   sp.set("slug", slug);
+  // /program/{slug} is its own post type in WordPress (a news post may share the slug).
+  if (section === "program") {
+    const items = await apiFetch<WPV2Item[]>(`${WP_V2_BASE}/program?${sp.toString()}&_embed=author,wp:featuredmedia`);
+    const item = items?.[0];
+    return item ? v2ToPost(item, pathOf(item.link) ?? `/program/${slug}`) : null;
+  }
   const data = await apiFetch<WPPost[]>(`${CONTENTS_BASE}/posts?${sp.toString()}`);
-  return data && data.length ? data[0] : null;
+  if (data && data.length) return data[0];
+  // /{slug} alone may be a static page (about-us, privacy-policy, …).
+  if (section === slug) {
+    const pages = await apiFetch<WPV2Item[]>(`${WP_V2_BASE}/pages?${sp.toString()}&_embed=author,wp:featuredmedia`);
+    const page = pages?.[0];
+    if (page) return v2ToPost(page, pathOf(page.link) ?? `/${slug}`);
+  }
+  return null;
 }
 
 // ---------- taxonomies (still wp/v2) ----------
@@ -342,55 +448,12 @@ export async function getUserBySlug(slug: string): Promise<WPUser | null> {
   return data && data.length ? data[0] : null;
 }
 
-// ---------- lottery (Government Lottery Office API) ----------
+// ---------- lottery (D1, filled by apps/lotto) ----------
 
-type GloPrize = { price: string; number: Array<{ value: string }> };
-const GLO_PRIZES: Array<[key: string, id: string, name: string, running: boolean]> = [
-  ["first", "prizeFirst", "รางวัลที่ 1", false],
-  ["near1", "prizeFirstNear", "รางวัลข้างเคียงรางวัลที่ 1", false],
-  ["second", "prizeSecond", "รางวัลที่ 2", false],
-  ["third", "prizeThird", "รางวัลที่ 3", false],
-  ["fourth", "prizeForth", "รางวัลที่ 4", false],
-  ["fifth", "prizeFifth", "รางวัลที่ 5", false],
-  ["last3f", "runningNumberFrontThree", "รางวัลเลขหน้า 3 ตัว", true],
-  ["last3b", "runningNumberBackThree", "รางวัลเลขท้าย 3 ตัว", true],
-  ["last2", "runningNumberBackTwo", "รางวัลเลขท้าย 2 ตัว", true],
-];
-
-/** Latest draw from glo.or.th, in the shape the lottery pages use. */
+/** Latest draw, in the shape the home page block uses (date as Thai text). */
 export async function getLottoLatest(): Promise<LottoResult | null> {
-  try {
-    const res = await fetch("https://www.glo.or.th/api/lottery/getLatestLottery", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "{}",
-      next: { revalidate: 1800 },
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as {
-      status?: boolean;
-      response?: { date?: string; data?: Record<string, GloPrize> };
-    };
-    const data = json.response?.data;
-    if (!json.status || !data || !json.response?.date) return null;
-    const result: LottoResult = { date: thaiDate(json.response.date), prizes: [], runningNumbers: [] };
-    for (const [key, id, name, running] of GLO_PRIZES) {
-      const p = data[key];
-      if (!p) continue;
-      const number = p.number.map((n) => n.value).sort();
-      const reward = String(Math.round(Number(p.price)));
-      (running ? result.runningNumbers : result.prizes).push({ id, name, reward, amount: number.length, number });
-    }
-    return result.prizes.length ? result : null;
-  } catch {
-    return null;
-  }
-}
-
-/** "2026-11-01" → "1 พฤศจิกายน 2569" */
-function thaiDate(iso: string): string {
-  const d = new Date(`${iso}T00:00:00+07:00`);
-  return d.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Bangkok" });
+  const draw = await getLatestDraw();
+  return draw ? { date: thaiDate(draw.date), prizes: draw.prizes, runningNumbers: draw.runningNumbers } : null;
 }
 
 // ---------- Bright custom sidebar endpoint ----------

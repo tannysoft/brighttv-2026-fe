@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { getPosts, getUserBySlug } from "@/lib/wp";
-import { stripHtml } from "@/lib/utils";
+import { getPostsWindow, getUserBySlug } from "@/lib/wp";
+import { listingWindow, parsePageParam, stripHtml } from "@/lib/utils";
 import ArticleCard from "@/components/ArticleCard";
 import HeroSideGrid from "@/components/HeroSideGrid";
 import SectionTitle from "@/components/SectionTitle";
@@ -34,22 +34,25 @@ export default async function AuthorPage({
   searchParams,
 }: {
   params: Promise<Params>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string | string[] }>;
 }) {
   const { slug } = await params;
   const sp = await searchParams;
-  const page = Math.max(1, Number(sp.page || "1"));
+  const page = parsePageParam(sp.page);
+  if (page === null) notFound();
 
   const user = await getUserBySlug(slug);
   if (!user) notFound();
 
-  // Page 1: 1 hero + 4 side + 12 grid = 17; page 2+: 12 grid only.
-  const perPage = page === 1 ? 17 : 12;
-  const posts = await getPosts({ author: user.id, perPage, page });
-  if (!posts.length && page === 1) notFound();
+  // Page 1: 1 hero + 4 side + 12 grid = 17; page 2+: 12 grid only (by offset,
+  // so pages don't overlap). An author with no stories still gets a page 1.
+  const win = listingWindow(page, 17, 12);
+  const { posts, total } = await getPostsWindow({ author: user.id, offset: win.offset, limit: win.limit });
+  const totalPages = win.totalPages(total);
+  if (page > totalPages) notFound();
 
   const [lead, ...rest] = posts;
-  const hasNext = posts.length === perPage;
+  const hasNext = page < totalPages;
   const description =
     stripHtml(user.description) ||
     `รวมบทความทั้งหมดจาก ${user.name} บน BRIGHT TV`;
@@ -135,6 +138,9 @@ export default async function AuthorPage({
       )}
 
       <SectionTitle title={`ทุกบทความจาก ${user.name}`} />
+      {!posts.length && (
+        <p className="text-sm text-[var(--bt-muted)]">ยังไม่มีบทความจากผู้เขียนคนนี้</p>
+      )}
       <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
         {(page === 1 ? rest.slice(4) : posts).map((p) => (
           <ArticleCard key={p.id} post={p} variant="feature" />

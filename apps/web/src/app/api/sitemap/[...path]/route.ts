@@ -71,59 +71,41 @@ export async function GET(
 // ===== Sitemap Index =====
 
 async function buildIndex(): Promise<string> {
-  // Fetch totals + the LAST post of each page's batch (1 post per page)
-  // to get the real lastmod date. Posts are sorted date desc, so page 1's
-  // LAST item (post #100) is the oldest in that batch — but we want the
-  // FIRST item (newest) as lastmod. Use per_page=1 to get just that.
-  //
-  // For 1712 pages we batch 50 parallel HEAD-like calls at a time.
-  const [postTotal, tagTotal] = await Promise.all([
+  // Cheap: the number of sub-sitemaps comes from X-WP-Total (one cached
+  // per_page=1 request per type) instead of walking every page. Only the
+  // first post sitemap (newest stories) gets a real <lastmod>; the older
+  // ones' content rarely changes, and <lastmod> is optional.
+  const [posts, tags, newest] = await Promise.all([
     getTotal(`${WP_API_ORIGIN}/wp-json/contents/v1/posts`),
     getTotal(`${WP_API_ORIGIN}/wp-json/wp/v2/tags`),
+    json<Array<{ modified_gmt?: string }>>(`${WP_API_ORIGIN}/wp-json/contents/v1/posts?per_page=1&_fields=modified_gmt`),
   ]);
-  const postPages = Math.ceil(postTotal / PER_PAGE);
-  const tagPages = Math.ceil(tagTotal / PER_PAGE);
+  if (!posts) throw new Error("WordPress post total unavailable");
+  const postPages = Math.ceil(posts / PER_PAGE);
+  const tagPages = Math.ceil(tags / PER_PAGE);
   const now = new Date().toISOString();
-
-  // Fetch lastmod for each post-sitemap page: get the first (newest) post
-  // of each 100-post batch via per_page=1&page=((N-1)*100+1).
-  // Batch 50 at a time to stay fast without overwhelming WP.
-  const lastmods: Record<number, string> = {};
-  const BATCH = 50;
-  for (let start = 1; start <= postPages; start += BATCH) {
-    const end = Math.min(start + BATCH - 1, postPages);
-    await Promise.all(
-      Array.from({ length: end - start + 1 }, (_, i) => {
-        const page = start + i;
-        const apiPage = (page - 1) * PER_PAGE + 1;
-        return json<Array<{ modified_gmt?: string }>>(
-          `${WP_API_ORIGIN}/wp-json/contents/v1/posts?per_page=1&page=${apiPage}`,
-        ).then((posts) => {
-          if (posts[0]?.modified_gmt) lastmods[page] = `${posts[0].modified_gmt}+00:00`;
-        });
-      }),
-    );
-  }
+  const latest = newest[0]?.modified_gmt ? `${newest[0].modified_gmt}+00:00` : now;
 
   const e: string[] = [];
   for (let i = 1; i <= postPages; i++) {
     const file = i === 1 ? "post-sitemap.xml" : `post-sitemap${i}.xml`;
-    e.push(entry(file, lastmods[i] || now));
+    e.push(entry(file, i === 1 ? latest : undefined));
   }
-  e.push(entry("category-sitemap.xml", now));
+  e.push(entry("category-sitemap.xml", latest));
 
   for (let i = 1; i <= tagPages; i++) {
     const file = i === 1 ? "post_tag-sitemap.xml" : `post_tag-sitemap${i}.xml`;
-    e.push(entry(file, now));
+    e.push(entry(file, i === 1 ? latest : undefined));
   }
 
-  e.push(entry("page-sitemap.xml", now));
-  e.push(entry("author-sitemap.xml", now));
+  e.push(entry("page-sitemap.xml"));
+  e.push(entry("author-sitemap.xml", latest));
   return wrap("sitemapindex", e.join("\n"));
 }
 
-function entry(file: string, lastmod: string) {
-  return `  <sitemap>\n    <loc>${SITE_ORIGIN}/${file}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </sitemap>`;
+function entry(file: string, lastmod?: string) {
+  const mod = lastmod ? `\n    <lastmod>${lastmod}</lastmod>` : "";
+  return `  <sitemap>\n    <loc>${SITE_ORIGIN}/${file}</loc>${mod}\n  </sitemap>`;
 }
 
 // ===== Post Sitemap =====
@@ -245,10 +227,12 @@ function wrap(root: string, body: string, img = false) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${ns}>\n${body}\n</urlset>`;
 }
 
+/** X-WP-Total of a collection: one cached per_page=1 request. */
 async function getTotal(url: string) {
   try {
-    const r = await fetch(`${url}?per_page=1`, { method: "HEAD", headers: WP_HEADERS });
-    return parseInt(r.headers.get("x-wp-total") || "0", 10);
+    const r = await fetch(`${url}?per_page=1&_fields=id`, { next: { revalidate: CACHE_TTL }, headers: WP_HEADERS });
+    const n = parseInt(r.headers.get("x-wp-total") || "0", 10);
+    return Number.isFinite(n) ? n : 0;
   } catch { return 0; }
 }
 

@@ -10,7 +10,9 @@ export default function JsonLd({ data }: { data: object | object[] }) {
           key={i}
           async
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(d) }}
+          // Titles are decoded text: escape "<" so a "</script>" in a
+          // headline cannot close the tag.
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(d).replace(/</g, "\\u003c") }}
         />
       ))}
     </>

@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { getPosts } from "@/lib/wp";
+import { getPostsWindow } from "@/lib/wp";
+import { listingWindow, parsePageParam } from "@/lib/utils";
 import ArticleCard from "@/components/ArticleCard";
 import JsonLd from "@/components/JsonLd";
 import { breadcrumbSchema, collectionPageSchema } from "@/lib/schema";
@@ -38,21 +39,23 @@ export default async function TagPage({
   searchParams,
 }: {
   params: Promise<Params>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string | string[] }>;
 }) {
   const { slug } = await params;
   const sp = await searchParams;
-  const page = Math.max(1, Number(sp.page || "1"));
+  const page = parsePageParam(sp.page);
+  if (page === null) notFound();
   const name = safeDecode(slug);
 
   // Single API call — contents/v1 supports `tag_slug` directly, so we
   // don't need a separate tag-lookup call anymore. Posts come back with
   // featured_image, author_info, taxonomies inline (no _embed needed).
-  const perPage = 16;
-  const posts = await getPosts({ tagSlug: slug, perPage, page });
-  if (!posts.length && page === 1) notFound();
+  const win = listingWindow(page, 16, 16);
+  const { posts, total } = await getPostsWindow({ tagSlug: slug, offset: win.offset, limit: win.limit });
+  const totalPages = win.totalPages(total);
+  if (!posts.length || page > totalPages) notFound();
 
-  const hasNext = posts.length === perPage;
+  const hasNext = page < totalPages;
 
   return (
     <div className="mx-auto max-w-[1320px] px-4 py-8">

@@ -1,0 +1,37 @@
+/**
+ * Lottery results job: reads the Government Lottery Office (GLO) API on a
+ * schedule and stores each draw in D1 (`brighttv-lotto`). The website reads
+ * the same D1 and never calls GLO itself.
+ *
+ *   pnpm --filter @brighttv/lotto run db:migrate   # schema
+ *   pnpm --filter @brighttv/lotto run backfill     # all draws since 2010 (once)
+ *   pnpm --filter @brighttv/lotto run dev          # then curl "localhost:8787/__scheduled"
+ *
+ * Workers Builds: Path /apps/lotto, Build: pnpm install --frozen-lockfile,
+ * Deploy: pnpm exec wrangler deploy, Watch paths: apps/lotto/*
+ * Secret: REVALIDATE_SECRET (same value as the web worker).
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "8a21a543bd0ac55148179deddb67ee1c",
+  "name": "brighttv-lotto",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "observability": { "enabled": true },
+  // Results come out between ~14:30 and ~16:00 Thai time; check every 10
+  // minutes 14:00–18:59 (07–11 UTC) every day, since some draws move off the 1st/16th.
+  "triggers": { "crons": ["*/10 7-11 * * *"] },
+  "d1_databases": [
+    {
+      "binding": "LOTTO_DB",
+      "database_name": "brighttv-lotto",
+      "database_id": "2776ae8c-00b4-45df-8dca-070dfb392830",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    // Website to refresh (cache tag "lotto") when a draw is added or changes.
+    "WEB_URL": "https://new.brighttv.co.th"
+  }
+}

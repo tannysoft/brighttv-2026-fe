@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getCategoryBySlug, getPosts } from "@/lib/wp";
-import { stripHtml } from "@/lib/utils";
+import { getCategoryBySlug, getPostsWindow } from "@/lib/wp";
+import { listingWindow, parsePageParam, stripHtml } from "@/lib/utils";
 import { findNavBySlug } from "@/lib/categories";
 import ArticleCard from "@/components/ArticleCard";
 import HeroSideGrid from "@/components/HeroSideGrid";
@@ -22,7 +22,7 @@ export async function generateMetadata({
   const { slug } = await params;
   const nav = findNavBySlug(slug);
   const cat = nav ? null : await getCategoryBySlug(slug);
-  const name = nav?.name || cat?.name || "หมวดหมู่ข่าว";
+  const name = nav?.name || stripHtml(cat?.name) || "หมวดหมู่ข่าว";
   // Use WP category description if available; extend the generic template to
   // 150+ chars so Google shows the full snippet instead of auto-generating one.
   const wpDesc = cat?.description ? stripHtml(cat.description) : "";
@@ -41,45 +41,53 @@ export default async function CategoryPage({
   searchParams,
 }: {
   params: Promise<Params>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string | string[] }>;
 }) {
   const { slug } = await params;
   const sp = await searchParams;
-  const page = Math.max(1, Number(sp.page || "1"));
+  const page = parsePageParam(sp.page);
+  if (page === null) notFound();
 
   const nav = findNavBySlug(slug);
   // Always fetch the WP category so we can use its description. When we
   // already know the id from the local nav map we can do it in parallel
   // with the posts fetch; otherwise we need the id first, then the posts.
-  const perPage = page === 1 ? 17 : 12;
+  // Page 1: 1 hero + 4 side + 12 grid = 17; page 2+: 12 grid only. Fetched
+  // by offset so page 2 starts right after page 1's 17 stories.
+  const win = listingWindow(page, 17, 12);
   let categoryId: number | undefined = nav?.id;
   let categoryName: string | undefined = nav?.name;
   let wpDescription = "";
   let acfHeading2 = "";
   let acfContents = "";
   let posts;
+  let total = 0;
 
   if (nav) {
     const [wpCat, fetched] = await Promise.all([
       getCategoryBySlug(slug),
-      getPosts({ categories: nav.id, perPage, page }),
+      getPostsWindow({ categories: nav.id, offset: win.offset, limit: win.limit }),
     ]);
     if (wpCat?.description) wpDescription = wpCat.description;
     acfHeading2 = wpCat?.acf?.heading_2 ?? "";
     acfContents = wpCat?.acf?.contents ?? "";
-    posts = fetched;
+    posts = fetched.posts;
+    total = fetched.total;
   } else {
     const wpCat = await getCategoryBySlug(slug);
     if (!wpCat) notFound();
     categoryId = wpCat.id;
-    categoryName = wpCat.name;
+    categoryName = stripHtml(wpCat.name);
     wpDescription = wpCat.description ?? "";
     acfHeading2 = wpCat.acf?.heading_2 ?? "";
     acfContents = wpCat.acf?.contents ?? "";
-    posts = await getPosts({ categories: wpCat.id, perPage, page });
+    const fetched = await getPostsWindow({ categories: wpCat.id, offset: win.offset, limit: win.limit });
+    posts = fetched.posts;
+    total = fetched.total;
   }
 
-  if (!posts.length && page === 1) notFound();
+  const totalPages = win.totalPages(total);
+  if (!posts.length || page > totalPages) notFound();
 
   // WP category description can contain HTML — strip tags before rendering.
   // Fall back to the generic template when the category has no description.
@@ -88,7 +96,7 @@ export default async function CategoryPage({
     `รวมข่าว${categoryName}ล่าสุด อัปเดตทุกความเคลื่อนไหว`;
 
   const [lead, ...rest] = posts;
-  const hasNext = posts.length === perPage;
+  const hasNext = page < totalPages;
 
   return (
     <div className="mx-auto max-w-[1320px] px-4 py-8">
