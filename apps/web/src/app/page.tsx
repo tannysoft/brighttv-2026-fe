@@ -23,7 +23,7 @@ import CategorySection from "@/components/CategorySection";
 import CategoryColumnSection from "@/components/CategoryColumnSection";
 import BreakingTicker from "@/components/BreakingTicker";
 import SocialTrend from "@/components/SocialTrend";
-import { HOMEPAGE_SECTIONS } from "@/lib/categories";
+import { HOMEPAGE_SECTIONS, categoryPath } from "@/lib/categories";
 
 // ISR: render once, cache for 5 minutes, revalidate in background.
 // DO NOT add `dynamic = "force-dynamic"` — it overrides revalidate and
@@ -84,7 +84,7 @@ export default async function HomePage() {
 
         {/* LATEST GRID */}
         <section className="mb-14">
-          <SectionTitle title="ข่าวล่าสุด" href="/category/news" accent="red" />
+          <SectionTitle title="ข่าวล่าสุด" href="/news" accent="red" />
           <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
             {recent.map((p) => (
               <ArticleCard key={p.id} post={p} variant="feature" />
@@ -145,7 +145,7 @@ function CrimeFullWidth({ posts }: { posts: import("@/lib/wp").WPPost[] }) {
   const [lead, ...rest] = posts;
   return (
     <section className="mt-14">
-      <SectionTitle title={CRIME.name} href={`/category/${CRIME.slug}`} accent="red" />
+      <SectionTitle title={CRIME.name} href={categoryPath(CRIME.slug)} accent="red" />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <ArticleCard post={lead} variant="hero" />
@@ -183,7 +183,7 @@ async function SidebarList({
   if (!posts.length) return null;
   return (
     <section>
-      <SectionTitle title={category.name} href={`/category/${category.slug}`} />
+      <SectionTitle title={category.name} href={categoryPath(category.slug)} />
       <div className="space-y-4">
         {posts.map((p) => (
           <ArticleCard key={p.id} post={p} variant="compact" />
@@ -213,7 +213,7 @@ async function HoroscopeLottoBlock() {
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-xl sm:text-2xl font-extrabold">ดูดวง</h2>
           <Link
-            href={`/category/${HOROSCOPE.slug}`}
+            href={categoryPath(HOROSCOPE.slug)}
             className="text-xs font-semibold text-white/80 hover:text-white"
           >
             ดูทั้งหมด ›
@@ -385,7 +385,7 @@ async function HoroscopeLottoBlock() {
               })}
             </ul>
             <Link
-              href={`/category/${LOTTO.slug}`}
+              href={categoryPath(LOTTO.slug)}
               className="mt-4 inline-flex items-center justify-center gap-2 h-10 rounded-full bg-[var(--bt-bg)] hover:bg-[var(--bt-navy)] hover:!text-white border border-[var(--bt-line)] hover:border-[var(--bt-navy)] text-[var(--bt-navy)] text-xs font-bold transition-colors"
             >
               ดูข่าวหวยทั้งหมด
@@ -425,7 +425,7 @@ function VideoSection({ posts }: { posts: import("@/lib/wp").WPPost[] }) {
             </div>
           </div>
           <Link
-            href={`/category/${VIDEO.slug}`}
+            href={categoryPath(VIDEO.slug)}
             className="hidden sm:inline-flex items-center gap-2 h-11 px-5 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur !text-white text-sm font-bold border border-white/15 transition-colors"
           >
             ดูทั้งหมด

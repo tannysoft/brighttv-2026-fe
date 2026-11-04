@@ -80,3 +80,22 @@ export function stripHtml(html: string | null | undefined): string {
   // literal text "<b>" instead of being treated as markup.
   return decodeEntities(html.replace(/<[^>]*>/g, "")).trim();
 }
+
+/**
+ * Meta description from rendered HTML or plain text: tags stripped, entities
+ * decoded, whitespace collapsed, then cut to `max` chars at the last space
+ * (Thai often has none — then a hard cut) with "…" appended when cut.
+ */
+export function metaDescription(input: string | null | undefined, max = 155): string {
+  const text = stripHtml(input)
+    .replace(/\s+/g, " ")
+    // WordPress auto-excerpt marker "[…]" → a plain ellipsis.
+    .replace(/\s*\[(?:…|\.\.\.)\]\s*$/, "…")
+    .trim();
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  // Only back up to a space if it doesn't throw away most of the text.
+  const head = space >= max * 0.6 ? cut.slice(0, space) : cut;
+  return `${head.replace(/[\s,.;:–—-]+$/, "")}…`;
+}

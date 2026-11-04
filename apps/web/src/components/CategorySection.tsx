@@ -2,6 +2,7 @@ import { getPosts } from "@/lib/wp";
 import ArticleCard from "./ArticleCard";
 import SectionTitle from "./SectionTitle";
 import { NavCategory } from "@/lib/categories";
+import { categoryPath } from "@/lib/categories";
 
 export default async function CategorySection({ category }: { category: NavCategory }) {
   const posts = await getPosts({ categories: category.id, perPage: 4 });
@@ -10,7 +11,7 @@ export default async function CategorySection({ category }: { category: NavCateg
 
   return (
     <section>
-      <SectionTitle title={category.name} href={`/category/${category.slug}`} />
+      <SectionTitle title={category.name} href={categoryPath(category.slug)} />
       <div className="grid gap-6 md:grid-cols-2">
         <ArticleCard post={lead} variant="feature" />
         <div className="space-y-4">

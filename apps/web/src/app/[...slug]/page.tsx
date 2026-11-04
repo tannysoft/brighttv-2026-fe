@@ -2,9 +2,11 @@ import { notFound, permanentRedirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { getArticleSidebar, getPostBySlug } from "@/lib/wp";
-import { SITE_ORIGIN, WP_API_ORIGIN } from "@/lib/env";
+import { getArticleSidebar, getMediaSizes, getPostBySlug } from "@/lib/wp";
+import { SITE_NOINDEX, SITE_ORIGIN, WP_API_ORIGIN } from "@/lib/env";
 import {
+  DEFAULT_FEATURED_IMAGE,
+  metaDescription,
   getAuthorName,
   getAuthorUrl,
   getFeaturedImage,
@@ -25,11 +27,70 @@ import JsonLd from "@/components/JsonLd";
 import RankedItem from "@/components/RankedItem";
 import StickyBottomAside from "@/components/StickyBottomAside";
 import TopKeywordsWidget from "@/components/TopKeywordsWidget";
-import { breadcrumbSchema, newsArticleSchema, videoObjectSchema } from "@/lib/schema";
+import {
+  DEFAULT_OG_IMAGE,
+  SITE_NAME,
+  TWITTER_SITE,
+  breadcrumbSchema,
+  newsArticleSchema,
+  toUtcIso,
+  videoObjectSchema,
+  webPageSchema,
+} from "@/lib/schema";
+import { CATEGORY_PARENT, categoryFromSegments, categoryPath, pagePath, splitPage } from "@/lib/categories";
+import { parsePageParam } from "@/lib/utils";
+import CategoryListing, { LATEST_PATH, listingMetadata, loadCategory, type ListingSource } from "@/components/CategoryListing";
 
 export const revalidate = 600;
 
 type Params = { slug: string[] };
+type Search = { page?: string | string[] };
+
+const decodeSeg = (s: string) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
+
+/**
+ * Category pages share this route with articles: /news/politics (known
+ * sub-category at its exact path), /{top-level category}, and their pages
+ * /…/page/N (also /news/page/N, the latest-news list). A sub-category slug
+ * on its own (/politics), a category away from its path (/entertain →
+ * /news/entertain), /page/1 and the old ?page=N all redirect. Anything else
+ * is an article or static page (null).
+ */
+type Listing = { src: ListingSource; page: number } | { redirect: string };
+async function resolveListing(segments: string[], queryPage: string | string[] | undefined): Promise<Listing | null> {
+  const { base, page, paged } = splitPage(segments);
+  let src: ListingSource | null = null;
+  if (base.length === 1 && decodeSeg(base[0]) === "news") {
+    src = { kind: "latest" };
+  } else {
+    const sub = categoryFromSegments(base);
+    if (sub) src = await loadCategory(sub);
+    else if (base.length === 1) {
+      const leaf = decodeSeg(base[0]);
+      if (CATEGORY_PARENT[leaf]) return { redirect: pagePath(categoryPath(leaf), page ?? 1) };
+      src = await loadCategory(base[0]);
+      if (src?.kind === "category" && decodeSeg(categoryPath(src.slug)) !== `/${leaf}`) {
+        return { redirect: pagePath(categoryPath(src.slug), page ?? 1) };
+      }
+    }
+  }
+  if (!src) return null;
+  const path = src.kind === "latest" ? LATEST_PATH : categoryPath(src.slug);
+  if (paged && page === null) return { redirect: path };
+  if (!paged && queryPage !== undefined) return { redirect: pagePath(path, parsePageParam(queryPage) ?? 1) };
+  return { src, page: page ?? 1 };
+}
+
+/** Link to a post's category page. */
+function categoryHref(cat: { slug: string; link?: string }): string {
+  return cat.link?.startsWith("/") ? cat.link : categoryPath(cat.slug);
+}
 
 // Extract the WP post slug from a possibly nested URL like
 // /news/politics/evaluation-results-policy → "evaluation-results-policy"
@@ -53,28 +114,133 @@ function pickRandom<T>(arr: readonly T[], n: number): T[] {
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<Params>;
+  searchParams: Promise<Search>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const listing = await resolveListing(slug, (await searchParams).page);
+  if (listing && !("redirect" in listing)) return listingMetadata(listing.src, listing.page);
   const post = await getPostBySlug(pickSlug(slug), slug[0]);
-  if (!post) return { title: "ไม่พบบทความ" };
-  // Yoast values carried over to the CMS win over the defaults.
-  const seo = post._seo;
-  const title = seo?.title || stripHtml(post.title.rendered);
-  const description = (seo?.description || stripHtml(post.excerpt.rendered)).slice(0, 160);
+  if (!post) return { title: "ไม่พบบทความ", alternates: { canonical: null } };
+  return articleMetadata(post);
+}
+
+type Post = NonNullable<Awaited<ReturnType<typeof getPostBySlug>>>;
+
+// Titles longer than this drop the " | BRIGHT TV" suffix (Google cuts ~60 chars).
+const LONG_TITLE = 55;
+
+/** Plain-text description: Yoast/CMS value, else the excerpt, else the opening text of the body. */
+function postDescription(post: Post): string {
+  return (
+    metaDescription(post._seo?.description) ||
+    metaDescription(post.excerpt?.rendered) ||
+    metaDescription(bodyText(post.content?.rendered))
+  );
+}
+
+/** Body text without embeds/scripts/captions, for a fallback description. */
+function bodyText(html: string | null | undefined): string {
+  return (html ?? "")
+    .replace(/<(script|style|figure|blockquote|iframe|noscript)\b[\s\S]*?<\/\1>/gi, " ")
+    .replace(/https?:\/\/\S+/g, " ");
+}
+
+/**
+ * Canonical path: the Yoast/CMS canonical when it points somewhere else,
+ * otherwise the post's own path. Our own hosts (and WordPress's) become
+ * paths so metadataBase (SITE_ORIGIN) applies.
+ */
+function canonicalFor(post: Post): string {
+  const own = getPostPath(post);
+  const c = post._seo?.canonical;
+  if (!c) return own;
+  try {
+    const u = new URL(c, SITE_ORIGIN);
+    const ours = new Set([new URL(SITE_ORIGIN).host, new URL(WP_API_ORIGIN).host, "www.brighttv.co.th", "brighttv.co.th"]);
+    if (!ours.has(u.host)) return u.toString();
+    const p = u.pathname.replace(/\/$/, "") || "/";
+    return safeDecode(p) === safeDecode(own) ? own : p;
+  } catch {
+    return own;
+  }
+}
+
+/** og:image / twitter:image: the featured image, else the Yoast social image. */
+function shareImage(post: Post): { url: string; width?: number; height?: number; alt?: string } | null {
   const img = getFeaturedImage(post, "full");
-  return {
-    title,
+  if (img && img.url !== DEFAULT_FEATURED_IMAGE.url) return img;
+  if (post._seo?.ogImage) return { url: post._seo.ogImage };
+  return null;
+}
+
+/**
+ * Schema.org image list: the lead image in each distinct aspect ratio WP
+ * has (16:9 first), each ≥ 50k pixels as Google requires.
+ */
+function schemaImages(post: Post): string[] {
+  const sizes = Object.values(post.featured_image?.sizes ?? {}).filter(
+    (s): s is NonNullable<typeof s> => Boolean(s?.src && s.width && s.height && s.width * s.height >= 50_000),
+  );
+  // Buckets: wide (16:9-ish), 4:3-ish, square, tall — one image each.
+  const bucket = (r: number) => (r >= 1.5 ? "wide" : r >= 1.15 ? "4:3" : r >= 0.85 ? "1:1" : "tall");
+  const byRatio = new Map<string, { src: string; px: number }>();
+  for (const s of sizes) {
+    const key = bucket(s.width / s.height);
+    const px = s.width * s.height;
+    if ((byRatio.get(key)?.px ?? 0) < px) byRatio.set(key, { src: s.src, px });
+  }
+  const list = [...byRatio.values()].sort((a, b) => b.px - a.px).map((s) => s.src);
+  if (list.length) return list;
+  const img = shareImage(post);
+  return img ? [img.url] : [];
+}
+
+function articleMetadata(post: Post): Metadata {
+  const seo = post._seo;
+  const isPage = post.type === "page";
+  const headline = seo?.title || stripHtml(post.title.rendered);
+  const description = postDescription(post);
+  const canonical = canonicalFor(post);
+  const img = shareImage(post);
+  const index = !SITE_NOINDEX && !seo?.noindex;
+  const follow = !SITE_NOINDEX && !seo?.nofollow;
+  const cat = isPage ? null : getPrimaryCategory(post);
+  const tags = post.taxonomies?.tags?.map((t) => t.name).filter(Boolean) ?? [];
+  const images = img ? [{ url: img.url, width: img.width, height: img.height, alt: img.alt || headline }] : [DEFAULT_OG_IMAGE];
+  const common = {
+    url: canonical,
+    title: headline,
     description,
-    // Own URL as canonical (the layout's "/" would otherwise apply to every article).
-    alternates: { canonical: seo?.canonical || getPostPath(post) },
-    ...(seo?.noindex || seo?.nofollow ? { robots: { index: !seo.noindex, follow: !seo.nofollow } } : {}),
-    openGraph: {
-      title,
+    siteName: SITE_NAME,
+    locale: "th_TH",
+    images,
+  };
+  return {
+    title: headline.length > LONG_TITLE ? { absolute: headline } : headline,
+    description,
+    alternates: { canonical, types: { "application/rss+xml": "/feed" } },
+    robots: index
+      ? { index, follow, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 }
+      : { index, follow },
+    openGraph: isPage
+      ? { ...common, type: "website" }
+      : {
+          ...common,
+          type: "article",
+          publishedTime: toUtcIso(post.date_gmt || post.date, Boolean(post.date_gmt)),
+          modifiedTime: toUtcIso(post.modified_gmt || post.modified, Boolean(post.modified_gmt)),
+          section: cat?.name,
+          tags: tags.length ? tags : undefined,
+        },
+    twitter: {
+      card: "summary_large_image",
+      site: TWITTER_SITE,
+      title: headline,
       description,
-      type: "article",
-      images: img ? [{ url: img.url, width: img.width, height: img.height }] : [],
+      images: [images[0].url],
     },
   };
 }
@@ -88,11 +254,53 @@ export async function generateMetadata({
 // for the providers Bright uses (TikTok, YouTube, Twitter/X, Instagram,
 // Facebook) so ArticleBody can re-execute the provider SDKs and light them
 // up client-side.
-function processContent(html: string): string {
-  return convertOEmbedBlocks(html).replace(
-    /loading="lazy"/g,
-    'loading="lazy" decoding="async"',
-  );
+function processContent(html: string, mediaSizes: MediaSizes = {}): string {
+  return processImages(convertOEmbedBlocks(html), mediaSizes);
+}
+
+type MediaSizes = Record<number, { width: number; height: number }>;
+
+/** Attachment ids of `<img class="wp-image-ID">` tags that have no width/height. */
+function unsizedImageIds(html: string): number[] {
+  const ids: number[] = [];
+  for (const m of html.matchAll(/<img\b[^>]*>/gi)) {
+    if (/\swidth\s*=/i.test(m[0]) && /\sheight\s*=/i.test(m[0])) continue;
+    const id = Number(m[0].match(/wp-image-(\d+)/)?.[1]);
+    if (id) ids.push(id);
+  }
+  return ids;
+}
+
+/**
+ * Body images: width/height (against layout shift) from the attachment
+ * sizes or a "-WxH" file name, lazy loading + async decoding for all but the
+ * first, `sizes` when there's a srcset, and an alt attribute on every one.
+ */
+function processImages(html: string, mediaSizes: MediaSizes): string {
+  let n = 0;
+  return html.replace(/<img\b([^>]*?)\s*\/?>/gi, (_tag, raw: string) => {
+    n++;
+    let attrs = raw;
+    const has = (name: string) => new RegExp(`\\s${name}\\s*=`, "i").test(attrs);
+    if (!has("width") || !has("height")) {
+      const id = Number(attrs.match(/wp-image-(\d+)/)?.[1]);
+      let dim = id ? mediaSizes[id] : undefined;
+      if (!dim) {
+        const src = attrs.match(/\ssrc\s*=\s*["']([^"']+)/i)?.[1];
+        const m = src?.match(/-(\d{2,5})x(\d{2,5})\.(?:jpe?g|png|webp|gif|avif)(?:[?#]|$)/i);
+        if (m) dim = { width: Number(m[1]), height: Number(m[2]) };
+      }
+      if (dim) {
+        attrs = attrs.replace(/\s(?:width|height)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+        attrs += ` width="${dim.width}" height="${dim.height}"`;
+      }
+    }
+    if (!has("alt")) attrs += ' alt=""';
+    if (n > 1 && !has("loading")) attrs += ' loading="lazy"';
+    if (n > 1 && !has("decoding")) attrs += ' decoding="async"';
+    if (has("srcset") && !has("sizes")) attrs += ' sizes="(max-width: 1024px) 100vw, 800px"';
+    return `<img${attrs} />`;
+  });
 }
 
 // Replace `<figure class="wp-block-embed-*"><div class="wp-block-embed__wrapper">URL</div></figure>`
@@ -170,8 +378,19 @@ function needsFbRoot(rawHtml: string): boolean {
   return /fb-(post|video|page)|facebook\.com\/plugins\/|connect\.facebook\.net|is-provider-facebook/i.test(rawHtml);
 }
 
-export default async function ArticlePage({ params }: { params: Promise<Params> }) {
+export default async function ArticlePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<Params>;
+  searchParams: Promise<Search>;
+}) {
   const { slug } = await params;
+  const listing = await resolveListing(slug, (await searchParams).page);
+  if (listing) {
+    if ("redirect" in listing) permanentRedirect(listing.redirect);
+    return <CategoryListing src={listing.src} page={listing.page} />;
+  }
   const post = await getPostBySlug(pickSlug(slug), slug[0]);
   if (!post) notFound();
 
@@ -189,13 +408,20 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
   const youtubeId = getYoutubeId(post);
   const cat = getPrimaryCategory(post);
   const author = getAuthorName(post);
-  const html = processContent(post.content.rendered);
+  // Static pages (about-us, privacy-policy …) aren't news: WebPage schema, no news lists.
+  const isPage = post.type === "page";
   const fbRoot = needsFbRoot(post.content.rendered);
 
   // Sidebar (related + mostview + latest) from Bright's custom endpoint. The
   // endpoint already excludes the current post and returns curated lists, so
   // we just map them through the WPPost adapter and slice to display sizes.
-  const sidebar = await getArticleSidebar(post);
+  const [sidebar, mediaSizes] = await Promise.all([
+    isPage ? { related: [], latest: [], mostview: [] } : getArticleSidebar(post),
+    getMediaSizes(unsizedImageIds(post.content.rendered)),
+  ]);
+  const html = processContent(post.content.rendered, mediaSizes);
+  const publishedIso = toUtcIso(post.date_gmt || post.date, Boolean(post.date_gmt));
+  const description = postDescription(post);
   const related = sidebar.related.slice(0, 4).map(sidebarPostToWPPost);
   const galleryRelated = sidebar.related.slice(0, 6).map(sidebarPostToWPPost);
   const mostview = sidebar.mostview.slice(0, 5).map(sidebarPostToWPPost);
@@ -216,11 +442,19 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
   // includes keywords without an extra API call.
   const tagNames = post.taxonomies?.tags?.map((t) => t.name).filter(Boolean);
 
-  const articleSchema = newsArticleSchema({
+  const articleSchema = isPage
+    ? webPageSchema({
+        url: articlePath,
+        name: title,
+        description,
+        type: /about/i.test(post.slug) ? "AboutPage" : /contact/i.test(post.slug) ? "ContactPage" : "WebPage",
+        dateModified: toUtcIso(post.modified_gmt || post.modified, Boolean(post.modified_gmt)),
+      })
+    : newsArticleSchema({
     url: articlePath,
     headline: title,
-    description: stripHtml(post.excerpt.rendered).slice(0, 200),
-    imageUrl: img?.url,
+    description,
+    images: schemaImages(post),
     datePublished: post.date_gmt || post.date,
     dateModified: post.modified_gmt || post.modified,
     datesAreGmt,
@@ -231,7 +465,7 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
   });
   const crumbSchema = breadcrumbSchema([
     { name: "หน้าแรก", url: "/" },
-    ...(cat ? [{ name: cat.name, url: `/category/${cat.slug}` }] : []),
+    ...(cat ? [{ name: cat.name, url: categoryHref(cat) }] : []),
     { name: title, url: articlePath },
   ]);
 
@@ -239,8 +473,11 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
   const videoSchema = youtubeId
     ? videoObjectSchema({
         name: title,
-        description: stripHtml(post.excerpt.rendered).slice(0, 200),
-        thumbnailUrl: img?.url || `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`,
+        description: description || title,
+        thumbnailUrl:
+          img && img.url !== DEFAULT_FEATURED_IMAGE.url
+            ? img.url
+            : `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`,
         uploadDate: post.date_gmt || post.date,
         embedUrl: `https://www.youtube.com/embed/${youtubeId}`,
         datesAreGmt: datesAreGmt,
@@ -258,7 +495,7 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
         <span className="shrink-0">›</span>
         {cat && (
           <>
-            <Link href={`/category/${cat.slug}`} className="shrink-0 hover:text-[var(--bt-red)]">
+            <Link href={categoryHref(cat)} className="shrink-0 hover:text-[var(--bt-red)]">
               {cat.name}
             </Link>
             <span className="shrink-0">›</span>
@@ -271,7 +508,7 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
         <div className="lg:col-span-2">
           {cat && (
             <Link
-              href={`/category/${cat.slug}`}
+              href={categoryHref(cat)}
               className="inline-block px-3 py-1 rounded-full bg-[var(--bt-red)] !text-white text-[11px] font-bold uppercase tracking-wider mb-4"
             >
               {cat.name}
@@ -298,7 +535,10 @@ export default async function ArticlePage({ params }: { params: Promise<Params> 
                     <div className="font-semibold text-[var(--bt-text)] hover:text-[var(--bt-red)] transition-colors">
                       {author}
                     </div>
-                    <div>เผยแพร่ {thaiDate(post.date, { withTime: true })}</div>
+                    <div>
+                      เผยแพร่{" "}
+                      <time dateTime={publishedIso}>{thaiDate(post.date, { withTime: true })}</time>
+                    </div>
                   </div>
                 );
                 return authorHref ? (

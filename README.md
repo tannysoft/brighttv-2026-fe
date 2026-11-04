@@ -103,6 +103,15 @@ pnpm migrate:wp --steps=files                # ตรวจว่าไฟล์
 - ไฟล์สื่อที่ WordPress มีหลาย record ชี้ไฟล์เดียวกัน นำเข้าแค่รายการแรก (รายการที่ข้ามอยู่ใน `.migrate/media-skipped.log` ข่าวที่ใช้จะจับคู่ตาม path ไฟล์)
 - ผู้ใช้ที่ย้ายมาแสดงชื่อเป็นผู้เขียนเหมือนเว็บเดิม (ปิดได้รายคนด้วย “แสดงชื่อเป็นผู้เขียน”)
 
+### สิ่งที่ตัดสินใจไว้แล้วสำหรับตอนย้ายเข้า Payload (ยังไม่ได้ทำ)
+
+- **หมวดบันเทิงย้ายไปอยู่ใต้หมวด "ข่าว"** (ตัดสินใจ 5 พ.ย. 2569) ข่าวบันเทิงจะเปลี่ยนจาก `/entertain/{slug}` เป็น `/news/entertain/{slug}` และบันเทิงเกาหลีจาก `/entertain/korea/{slug}` เป็น `/news/entertain/korea/{slug}` ตอนทำต้อง:
+  1. ตั้ง `parent` ของหมวด `entertain` (id 5) เป็น `news` (id 24972) ตอน import ใน `apps/cms/scripts/migrate-wp` (หรือแก้ใน CMS หลัง import)
+  2. `apps/web/src/lib/categories.ts`: เพิ่ม `entertain: "news"` ใน `CATEGORY_PARENT` และเอา `entertain` ออกจาก `CATEGORY_PATH_OVERRIDE`
+  3. redirect 301 จาก `/entertain/:path*` ไป `/news/entertain/:path*` (ระวังอย่าให้ชนกับหน้าหมวดและหน้าอื่น) แล้วทดสอบข่าวเก่าหลายปี
+  4. รอบ `--since` ตอน cutover ต้องไม่เขียน parent กลับเป็นค่าจาก WordPress
+  - ผลกระทบ: URL ข่าวบันเทิงราว 42,700 อันเปลี่ยน อันดับในหมวดนี้มักแกว่งช่วงแรกระหว่างที่ Google เก็บ URL ใหม่ ตอนนี้ (ก่อนย้าย) หน้าหมวดอยู่ที่ `/news/entertain` แล้ว แต่ข่าวยังอยู่ `/entertain/{slug}`
+
 ย้ายตรงเข้า PlanetScale ได้เลย (ไม่กินดิสก์เครื่อง): ใส่ connection string ของ PlanetScale ใน `DATABASE_URL` แล้วรัน `pnpm migrate:db` และ `pnpm migrate:wp`
 
 ## Deploy บน Cloudflare
@@ -154,4 +163,18 @@ pnpm --filter @brighttv/web run deploy   # SITE_NOINDEX=1 ใน wrangler.jsonc 
 1. งดแก้ไขใน WordPress
 2. `pnpm migrate:wp --since=<วันที่ย้ายรอบแรก>` (ชี้ `DATABASE_URL` ไปที่ PlanetScale)
 3. `apps/web/wrangler.jsonc`: เปิด routes `www.brighttv.co.th` / `brighttv.co.th`, ลบ `SITE_NOINDEX`; `apps/cms/wrangler.jsonc` และ `apps/lotto/wrangler.jsonc`: `WEB_URL=https://www.brighttv.co.th` แล้ว deploy ทุกแอป (deploy ใหม่ได้ build ID ใหม่ หน้าที่ cache ไว้ตอนยัง noindex จะไม่ถูกใช้ต่อ)
-4. ส่ง sitemap ใหม่ใน Search Console
+4. ล้าง cache ให้แน่ใจว่าไม่มีหน้าเก่าที่ยังเป็น noindex: Cloudflare dashboard → `brighttv.co.th` → Caching → Purge Everything แล้วสุ่มเช็ก `curl -s https://www.brighttv.co.th/<หน้าใดก็ได้> | grep 'name="robots"'` ต้องไม่มี `noindex` และ `curl https://www.brighttv.co.th/robots.txt` ต้องเป็น `Allow` พร้อมบรรทัด `Sitemap:`
+5. ส่ง sitemap ใหม่ใน Search Console (`/sitemap_index.xml` และ `/news-sitemap.xml`) และสมัคร Google News Publisher Center ถ้ายังไม่ได้ทำ
+
+## URL ของเว็บใหม่ (เทียบ WordPress)
+
+| หน้า | URL ใหม่ | URL เดิม (redirect 301 มาที่ใหม่) |
+| --- | --- | --- |
+| ข่าวล่าสุดทุกหมวด | `/news` | — |
+| หมวด | `/news/politics`, `/entertain/korea` (path เดียวกับที่ข่าวใช้) | `/category/news/politics`, `/category/politics`, `/politics` |
+| บันเทิง | `/news/entertain` (ข่าวยังเป็น `/entertain/{slug}`) | `/entertain`, `/category/entertain` |
+| ข่าวหวย | `/lotto/news` (ข่าวยังเป็น `/lotto/{slug}`) | `/category/lotto` |
+| หน้าถัดไป | `/news/politics/page/2` | `?page=2`, `/category/news/politics/page/2` |
+| RSS หมวด | `/feed/news/politics` | `/category/news/politics/feed` |
+
+ตำแหน่งหมวด (หมวดย่อยอยู่ใต้หมวดไหน) อยู่ที่ `CATEGORY_PARENT` ใน `apps/web/src/lib/categories.ts` ถ้าเพิ่มหมวดย่อยใหม่ต้องเพิ่มที่นี่ด้วย

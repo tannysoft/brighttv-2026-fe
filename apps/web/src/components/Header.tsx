@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { PRIMARY_NAV } from "@/lib/categories";
+import { PRIMARY_NAV, categoryPath } from "@/lib/categories";
 import { thaiDate } from "@/lib/utils";
 import FontSizeControl from "./FontSizeControl";
 
@@ -104,7 +104,7 @@ export default function Header() {
                 <SearchIcon />
               </Link>
               <Link
-                href="/category/hot-clip"
+                href={categoryPath("hot-clip")}
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-[var(--bt-red)] hover:bg-[var(--bt-red-600)] !text-white text-xs font-bold transition-colors"
               >
                 <VideoIcon />
@@ -169,7 +169,7 @@ export default function Header() {
               ตรวจหวย
             </Link>
             <Link
-              href="/category/hot-clip"
+              href={categoryPath("hot-clip")}
               className="hidden md:inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full bg-[var(--bt-red)] hover:bg-[var(--bt-red-600)] !text-white text-sm font-bold transition-colors"
             >
               <VideoIcon />
@@ -203,7 +203,7 @@ export default function Header() {
               {PRIMARY_NAV.map((c) => (
                 <li key={c.id}>
                   <Link
-                    href={`/category/${c.slug}`}
+                    href={categoryPath(c.slug)}
                     className="relative flex items-center h-12 px-3 sm:px-4 text-[14px] font-semibold text-[var(--bt-text)] hover:text-[var(--bt-red)] whitespace-nowrap transition-colors"
                   >
                     {c.name}
@@ -230,7 +230,7 @@ export default function Header() {
                 <SearchIcon />
               </Link>
               <Link
-                href="/category/hot-clip"
+                href={categoryPath("hot-clip")}
                 className="hidden sm:inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-full bg-[var(--bt-red)] hover:bg-[var(--bt-red-600)] !text-white text-xs font-bold transition-colors"
               >
                 <VideoIcon />
@@ -295,7 +295,7 @@ export default function Header() {
             {PRIMARY_NAV.map((c) => (
               <Link
                 key={c.id}
-                href={`/category/${c.slug}`}
+                href={categoryPath(c.slug)}
                 onClick={() => setMenuOpen(false)}
                 className="flex items-center h-12 px-4 rounded-lg text-[15px] font-semibold text-[var(--bt-text)] hover:bg-[var(--bt-bg)] hover:text-[var(--bt-red)]"
               >

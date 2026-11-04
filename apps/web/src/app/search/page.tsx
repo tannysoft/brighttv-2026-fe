@@ -2,6 +2,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getPosts } from "@/lib/wp";
 import { parsePageParam } from "@/lib/utils";
+import { SITE_NOINDEX } from "@/lib/env";
+import { DEFAULT_OG_IMAGE, SITE_NAME } from "@/lib/schema";
 import ArticleCard from "@/components/ArticleCard";
 import SectionTitle from "@/components/SectionTitle";
 
@@ -9,6 +11,17 @@ export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "ค้นหาข่าว",
+  description: "ค้นหาข่าวย้อนหลังจาก BRIGHT TV ทั้งข่าวการเมือง สังคม บันเทิง เศรษฐกิจ ต่างประเทศ กีฬา และหวย ด้วยคำค้นที่ต้องการ",
+  // Result pages are thin/duplicate content: keep them out of the index but let links be followed.
+  robots: { index: false, follow: !SITE_NOINDEX },
+  alternates: { canonical: "/search", types: { "application/rss+xml": "/feed" } },
+  openGraph: {
+    url: "/search",
+    type: "website",
+    siteName: SITE_NAME,
+    locale: "th_TH",
+    images: [DEFAULT_OG_IMAGE],
+  },
 };
 
 export default async function SearchPage({

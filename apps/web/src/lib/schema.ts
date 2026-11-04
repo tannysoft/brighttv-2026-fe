@@ -3,8 +3,32 @@
 import { SITE_ORIGIN } from "./env";
 
 const SITE_URL = SITE_ORIGIN;
-const SITE_NAME = "BRIGHT TV";
-const LOGO_URL = `${SITE_URL}/logo.svg`;
+export const SITE_NAME = "BRIGHT TV";
+/** X/Twitter handle for twitter:site. */
+export const TWITTER_SITE = "@BrightTv20";
+/** Site-wide share image (JPEG: some share scrapers don't take WebP). */
+export const DEFAULT_OG_IMAGE = {
+  url: "https://cdn.brighttv.co.th/wp-content/uploads/2017/07/04102155/brighttv-default.jpg",
+  width: 1200,
+  height: 630,
+  alt: "BRIGHT TV",
+};
+// Raster (Google ignores SVG logos): public/logo-600.png, rendered from logo.svg.
+const LOGO_URL = `${SITE_URL}/logo-600.png`;
+const LOGO_W = 600;
+const LOGO_H = 141;
+
+const hasTz = (iso: string) => /Z$|[+-]\d{2}:?\d{2}$/.test(iso);
+
+/**
+ * WordPress datetimes carry no zone: `*_gmt` fields are UTC, the others are
+ * Bangkok wall time. Returns a UTC ISO string ("…Z"), or undefined.
+ */
+export function toUtcIso(iso: string | null | undefined, isGmt = true): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(hasTz(iso) ? iso : `${iso}${isGmt ? "Z" : "+07:00"}`);
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString().replace(/\.000Z$/, "Z");
+}
 
 export function organizationSchema() {
   return {
@@ -16,8 +40,8 @@ export function organizationSchema() {
     logo: {
       "@type": "ImageObject",
       url: LOGO_URL,
-      width: 260,
-      height: 60,
+      width: LOGO_W,
+      height: LOGO_H,
     },
     sameAs: [
       "https://www.facebook.com/BrightTVOfficialMedia",
@@ -66,6 +90,8 @@ export function newsArticleSchema(args: {
   headline: string;
   description: string;
   imageUrl?: string;
+  /** Several crops of the lead image (Google wants 16:9, 4:3 and 1:1). Wins over `imageUrl`. */
+  images?: string[];
   /** ISO datetime. Accepts WP's naked site-local (`2026-04-09T10:31:17`) or
    *  WP's `date_gmt` (same shape, UTC). A `Z` suffix is added when missing
    *  so Google's Rich Results validator doesn't warn about ambiguous tz. */
@@ -98,7 +124,8 @@ export function newsArticleSchema(args: {
     },
     headline: args.headline,
     description: args.description,
-    image: args.imageUrl ? [args.imageUrl] : undefined,
+    image: args.images?.length ? args.images : args.imageUrl ? [args.imageUrl] : undefined,
+    isAccessibleForFree: true,
     datePublished: normaliseDate(args.datePublished),
     dateModified: normaliseDate(args.dateModified) || normaliseDate(args.datePublished),
     author: {
@@ -138,8 +165,34 @@ export function videoObjectSchema(args: {
     description: args.description,
     thumbnailUrl: args.thumbnailUrl,
     uploadDate,
-    contentUrl: args.contentUrl || `https://www.youtube.com/watch?v=${args.embedUrl.split("/embed/").pop()}`,
+    // contentUrl must be the media file itself: a YouTube watch page isn't one
+    // (Google flags it), so YouTube videos carry embedUrl only.
+    contentUrl:
+      args.contentUrl && !/(?:youtube\.com|youtu\.be)\//i.test(args.contentUrl) ? args.contentUrl : undefined,
     embedUrl: args.embedUrl,
+  };
+}
+
+/** Static page (about-us, contact-us, privacy-policy …): WebPage, or AboutPage / ContactPage. */
+export function webPageSchema(args: {
+  url: string;
+  name: string;
+  description?: string;
+  type?: "WebPage" | "AboutPage" | "ContactPage";
+  dateModified?: string;
+}) {
+  const fullUrl = args.url.startsWith("http") ? args.url : `${SITE_URL}${args.url}`;
+  return {
+    "@context": "https://schema.org",
+    "@type": args.type ?? "WebPage",
+    "@id": fullUrl,
+    url: fullUrl,
+    name: args.name,
+    description: args.description || undefined,
+    dateModified: args.dateModified,
+    isPartOf: { "@type": "WebSite", name: SITE_NAME, url: SITE_URL },
+    publisher: organizationSchema(),
+    inLanguage: "th-TH",
   };
 }
 

@@ -1,5 +1,7 @@
-import { getPosts } from "@/lib/wp";
+import { getPosts, getTagBySlug } from "@/lib/wp";
+import { stripHtml } from "@/lib/utils";
 import { FEED_SIZE, rssResponse } from "@/lib/rss";
+import { tagPath } from "../path";
 
 export const revalidate = 600;
 
@@ -8,21 +10,18 @@ export async function generateStaticParams() {
   return [];
 }
 
-/** RSS feed of a tag's latest stories. */
+/** RSS feed of a tag's latest stories (404 for an unknown or empty tag). */
 export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const posts = await getPosts({ tagSlug: slug, perPage: FEED_SIZE });
+  const tag = await getTagBySlug(slug);
+  if (!tag || !tag.count) return new Response("Not found", { status: 404 });
+  // By id, and only stories that carry the tag (see getTagBySlug).
+  const name = stripHtml(tag.name);
+  const posts = (await getPosts({ tags: tag.id, perPage: FEED_SIZE })).filter((p) => p.tags?.includes(tag.id));
   if (!posts.length) return new Response("Not found", { status: 404 });
-  let name = slug;
-  try {
-    name = decodeURIComponent(slug);
-  } catch {
-    // keep as is
-  }
   return rssResponse({
     title: `${name} – BRIGHT TV`,
-    // WordPress-style lowercase percent-encoding.
-    path: `/tag/${encodeURIComponent(name).replace(/%[0-9A-F]{2}/g, (m) => m.toLowerCase())}`,
+    path: tagPath(slug),
     description: `ข่าวที่ติดแท็ก ${name} จาก BRIGHT TV`,
     posts,
   });

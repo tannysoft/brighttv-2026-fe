@@ -7,6 +7,8 @@ import { thaiDate } from "./lotto-check";
 import { CMS_SOURCE, SITE_ORIGIN, WP_API_ORIGIN } from "./env";
 import * as cms from "./payload";
 import { topViewedIds } from "./views";
+import { unstable_cache } from "next/cache";
+import { decodeEntities } from "./utils/text";
 
 const usePayload = CMS_SOURCE === "payload";
 
@@ -77,6 +79,8 @@ export type WPPost = {
   categories: number[];
   tags: number[];
   pathname?: string;
+  /** WordPress post type: "post" (contents/v1), "page" (static pages), "program". */
+  type?: string;
 
   // Optional view count — only set by sidebarPostToWPPost().
   views?: string | number;
@@ -308,6 +312,7 @@ export async function getPostsWindow(params: {
   limit: number;
   categories?: number;
   author?: number;
+  tags?: number;
   tagSlug?: string;
 }): Promise<{ posts: WPPost[]; total: number }> {
   if (usePayload) return cms.findPostsWindow(params);
@@ -316,6 +321,7 @@ export async function getPostsWindow(params: {
   if (params.offset > 0) sp.set("offset", String(params.offset));
   if (params.categories) sp.set("categories", String(params.categories));
   if (params.author) sp.set("author", String(params.author));
+  if (params.tags) sp.set("tags", String(params.tags));
   if (params.tagSlug) sp.set("tag_slug", params.tagSlug);
   const url = `${CONTENTS_BASE}/posts?${sp.toString()}`;
   try {
@@ -346,9 +352,10 @@ type WPV2Item = Omit<Partial<WPPost>, "id" | "featured_media"> & {
 };
 
 /** Shape a /wp/v2/{pages,program} item (fetched with _embed) like a contents/v1 post. */
-function v2ToPost(raw: WPV2Item, pathname: string): WPPost {
+function v2ToPost(raw: WPV2Item, pathname: string, type?: string): WPPost {
   return {
     ...raw,
+    type: type ?? raw.type,
     id: Number(raw.id),
     date: raw.date ?? "",
     modified: raw.modified ?? raw.date ?? "",
@@ -390,12 +397,113 @@ export async function getPostPathById(id: number): Promise<string | null> {
   return null;
 }
 
+/** SEO overrides (Yoast values): CMS `meta` in Payload mode, the WordPress page head otherwise. */
+export type PostSeo = NonNullable<cms.CMSPost["_seo"]> & { ogImage?: string | null };
+
+// ---------- Yoast SEO (WordPress mode) ----------
+//
+// Yoast's REST output (yoast_head_json, /yoast/v1/get_head) is switched off
+// on the WordPress side, so the only place its title/description live is the
+// rendered page <head>. We read the page from WP_API_ORIGIN (always the
+// WordPress server in this mode — the REST API comes from the same host),
+// stop at </head>, keep only the few fields we use, and cache that small
+// object. Pages without Yoast's marker comment are ignored, so this can never
+// pick up our own markup.
+
+const YOAST_TTL = 3600;
+const BRAND_SUFFIX = /\s*[|\-–—]\s*Bright\s*TV\s*$/i;
+
+function attr(tag: string, name: string): string | undefined {
+  const m = tag.match(new RegExp(`\\s${name}\\s*=\\s*("([^"]*)"|'([^']*)')`, "i"));
+  return m ? (m[2] ?? m[3]) : undefined;
+}
+
+function findTag(head: string, re: RegExp): string | undefined {
+  return head.match(re)?.[0];
+}
+
+export function parseYoastHead(head: string): PostSeo {
+  const meta = (key: "name" | "property", value: string) => {
+    const tag = findTag(head, new RegExp(`<meta[^>]*\\s${key}=["']${value}["'][^>]*>`, "i"));
+    const v = tag ? attr(tag, "content") : undefined;
+    return v ? decodeEntities(v).trim() : undefined;
+  };
+  const rawTitle = head.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+  const title = (rawTitle ? decodeEntities(rawTitle).trim() : meta("property", "og:title"))?.replace(BRAND_SUFFIX, "");
+  let description = (meta("name", "description") ?? meta("property", "og:description"))?.replace(BRAND_SUFFIX, "");
+  // "เกี่ยวกับเรา - Bright TV" is just the title again: not a description.
+  if (description && title && description === title) description = undefined;
+  const canonTag = findTag(head, /<link[^>]*\srel=["']canonical["'][^>]*>/i);
+  const canonical = canonTag ? attr(canonTag, "href") : undefined;
+  const robots = meta("name", "robots") ?? "";
+  return {
+    title: title || null,
+    description: description || null,
+    canonical: canonical ? decodeEntities(canonical) : null,
+    noindex: /\bnoindex\b/i.test(robots),
+    nofollow: /\bnofollow\b/i.test(robots),
+    ogImage: meta("property", "og:image") ?? null,
+  };
+}
+
+/** Throws on network/HTTP failure so unstable_cache doesn't keep the miss. */
+async function fetchYoastHead(path: string): Promise<PostSeo | null> {
+  const res = await fetch(`${WP_API_ORIGIN}${path}`, {
+    headers: { ...WP_FETCH_HEADERS, Accept: "text/html" },
+    redirect: "manual",
+    signal: AbortSignal.timeout(5000),
+  });
+  if (res.status === 404 || (res.status >= 300 && res.status < 400)) return null;
+  if (!res.ok || !res.body) throw new Error(`yoast head ${res.status} ${path}`);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let html = "";
+  try {
+    while (html.length < 400_000) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value, { stream: true });
+      const end = html.search(/<\/head>/i);
+      if (end >= 0) {
+        html = html.slice(0, end);
+        break;
+      }
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+  if (!/Yoast SEO/i.test(html)) return null;
+  return parseYoastHead(html);
+}
+
+const yoastHeadCached = unstable_cache(fetchYoastHead, ["wp-yoast-head-v1"], { revalidate: YOAST_TTL });
+
+async function getYoastSeo(path: string | undefined): Promise<PostSeo | null> {
+  if (!path?.startsWith("/")) return null;
+  try {
+    return await yoastHeadCached(path);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[yoast] ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+/** Attach the Yoast values of a WordPress post/page as `_seo`. */
+async function withYoast<T extends WPPost>(post: T): Promise<T & { _seo?: PostSeo | null }> {
+  const path = post.pathname?.startsWith("/") ? post.pathname : (pathOf(post.link) ?? undefined);
+  return { ...post, _seo: await getYoastSeo(path) };
+}
+
 /** `section`: first URL segment — /program/{slug} and /lottery/{slug} are their own types in the CMS. */
-export async function getPostBySlug(slug: string, section?: string): Promise<(WPPost & { _seo?: cms.CMSPost["_seo"] }) | null> {
+export async function getPostBySlug(slug: string, section?: string): Promise<(WPPost & { _seo?: PostSeo | null }) | null> {
   if (usePayload) {
     if (section === "program" || section === "lottery") return cms.getSpecialBySlug(section, slug);
     // /{slug} alone may be a static page.
-    return (await cms.getPostBySlug(slug)) ?? (section === slug ? cms.getPageBySlug(slug) : null);
+    const post = await cms.getPostBySlug(slug);
+    if (post) return post;
+    const page = section === slug ? await cms.getPageBySlug(slug) : null;
+    return page ? { ...page, type: "page" } : null;
   }
   const sp = new URLSearchParams();
   sp.set("slug", slug);
@@ -403,17 +511,37 @@ export async function getPostBySlug(slug: string, section?: string): Promise<(WP
   if (section === "program") {
     const items = await apiFetch<WPV2Item[]>(`${WP_V2_BASE}/program?${sp.toString()}&_embed=author,wp:featuredmedia`);
     const item = items?.[0];
-    return item ? v2ToPost(item, pathOf(item.link) ?? `/program/${slug}`) : null;
+    return item ? withYoast(v2ToPost(item, pathOf(item.link) ?? `/program/${slug}`, "program")) : null;
   }
   const data = await apiFetch<WPPost[]>(`${CONTENTS_BASE}/posts?${sp.toString()}`);
-  if (data && data.length) return data[0];
+  if (data && data.length) return withYoast(data[0]);
   // /{slug} alone may be a static page (about-us, privacy-policy, …).
   if (section === slug) {
     const pages = await apiFetch<WPV2Item[]>(`${WP_V2_BASE}/pages?${sp.toString()}&_embed=author,wp:featuredmedia`);
     const page = pages?.[0];
-    if (page) return v2ToPost(page, pathOf(page.link) ?? `/${slug}`);
+    if (page) return withYoast(v2ToPost(page, pathOf(page.link) ?? `/${slug}`, "page"));
   }
   return null;
+}
+
+/**
+ * Pixel sizes of attachments by id (article body `<img class="wp-image-ID">`
+ * tags often lack width/height). One cached request per article.
+ */
+export async function getMediaSizes(ids: number[]): Promise<Record<number, { width: number; height: number }>> {
+  const uniq = [...new Set(ids.filter((n) => Number.isInteger(n) && n > 0))].sort((a, b) => a - b).slice(0, 100);
+  if (usePayload || !uniq.length) return {};
+  const items = await apiFetch<Array<{ id: number; media_details?: { width?: number; height?: number } }>>(
+    `${WP_V2_BASE}/media?include=${uniq.join(",")}&per_page=100&_fields=id,media_details`,
+    86400,
+  );
+  const out: Record<number, { width: number; height: number }> = {};
+  for (const m of items ?? []) {
+    const w = m.media_details?.width;
+    const h = m.media_details?.height;
+    if (w && h) out[m.id] = { width: w, height: h };
+  }
+  return out;
 }
 
 // ---------- taxonomies (still wp/v2) ----------
@@ -436,6 +564,23 @@ export async function getPopularTags(perPage = 20): Promise<WPTag[]> {
   return (
     (await apiFetch<WPTag[]>(`${WP_V2_BASE}/tags?orderby=count&order=desc&per_page=${perPage}`)) ?? []
   );
+}
+
+/**
+ * A tag by slug (raw Thai or percent-encoded, either case), or null. Listings
+ * query by its id: contents/v1 ignores an unmatched `tag_slug` and returns
+ * every post, which made unknown/empty tags soft 404s.
+ */
+export async function getTagBySlug(slug: string): Promise<WPTag | null> {
+  if (usePayload) return cms.getTagBySlug(slug);
+  let s = slug;
+  try {
+    s = decodeURIComponent(slug);
+  } catch {
+    // keep as is
+  }
+  const data = await apiFetch<WPTag[]>(`${WP_V2_BASE}/tags?slug=${encodeURIComponent(s)}&_fields=id,count,name,slug,link`);
+  return data && data.length ? data[0] : null;
 }
 
 // ---------- users (still wp/v2) ----------

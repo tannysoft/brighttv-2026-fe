@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { PRIMARY_NAV } from "@/lib/categories";
+import { PRIMARY_NAV, categoryPath } from "@/lib/categories";
 
 export default function Footer() {
   return (
@@ -20,7 +20,7 @@ export default function Footer() {
           <ul className="grid grid-cols-2 gap-y-2 text-sm text-white/80">
             {PRIMARY_NAV.map((c) => (
               <li key={c.id}>
-                <Link href={`/category/${c.slug}`} className="hover:text-[var(--bt-red)] transition-colors">
+                <Link href={categoryPath(c.slug)} className="hover:text-[var(--bt-red)] transition-colors">
                   {c.name}
                 </Link>
               </li>
@@ -59,7 +59,7 @@ export default function Footer() {
             </a>
           </div>
           <p className="mt-6 text-xs text-white/60">รับชมสด ทุกที่ ทุกเวลา</p>
-          <Link href="/category/hot-clip" className="mt-2 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-[var(--bt-red)] hover:bg-[var(--bt-red-600)] !text-white text-sm font-bold transition-colors">
+          <Link href={categoryPath("hot-clip")} className="mt-2 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-[var(--bt-red)] hover:bg-[var(--bt-red-600)] !text-white text-sm font-bold transition-colors">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-white"><rect x="2" y="6" width="14" height="12" rx="2" ry="2" /><path d="m22 8-6 4 6 4V8z" /></svg>
             ดูวิดีโอ BRIGHT TV
           </Link>

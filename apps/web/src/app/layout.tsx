@@ -5,7 +5,11 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { SITE_NOINDEX, SITE_ORIGIN } from "@/lib/env";
 import { getGlobalStylesCss } from "@/lib/wp";
-import { organizationSchema, websiteSchema } from "@/lib/schema";
+import { DEFAULT_OG_IMAGE, SITE_NAME, TWITTER_SITE, organizationSchema, websiteSchema } from "@/lib/schema";
+
+const HOME_TITLE = `${SITE_NAME} | อ่านข่าวออนไลน์ หวยงวดนี้ ทีวีออนไลน์ ทันทุกสถานการณ์`;
+const HOME_DESCRIPTION =
+  "ไบรท์ทีวี (BRIGHT TV) สำนักข่าวออนไลน์ เกาะติดทุกสถานการณ์ ข่าวการเมือง สังคม เศรษฐกิจ บันเทิง ต่างประเทศ กีฬา ตรวจหวยงวดนี้ และทีวีออนไลน์ ครบจบในที่เดียว";
 
 const notoThai = Noto_Sans_Thai({
   variable: "--font-noto-thai",
@@ -15,39 +19,35 @@ const notoThai = Noto_Sans_Thai({
 });
 
 export const metadata: Metadata = {
+  // Home title carries the keywords www ranks for ("อ่านข่าวออนไลน์ หวยงวดนี้ ทีวีออนไลน์").
   title: {
-    default: "BRIGHT TV — สำนักข่าวออนไลน์ ทันทุกสถานการณ์",
-    template: "%s | BRIGHT TV",
+    default: HOME_TITLE,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    "ไบรท์ทีวี (Bright TV) สำนักข่าวออนไลน์ เกาะติดทุกสถานการณ์ ข่าวการเมือง สังคม เศรษฐกิจ บันเทิง ต่างประเทศ กีฬา และไลฟ์สไตล์ ครบจบในที่เดียว",
+  description: HOME_DESCRIPTION,
   metadataBase: new URL(SITE_ORIGIN),
-  // Explicit robots directive so crawlers don't guess. Next.js auto-generates
-  // a canonical <link> from metadataBase + the current pathname.
+  // Explicit robots directive so crawlers don't guess.
   // SITE_NOINDEX=1 on the preview host (new.brighttv.co.th) until the cutover.
-  robots: SITE_NOINDEX ? { index: false, follow: false } : { index: true, follow: true },
-  alternates: { canonical: "/" },
+  robots: SITE_NOINDEX
+    ? { index: false, follow: false }
+    : { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 },
+  // "/" is the home page's canonical/og:url; every other page sets its own.
+  alternates: { canonical: "/", types: { "application/rss+xml": "/feed" } },
   openGraph: {
     type: "website",
-    siteName: "BRIGHT TV",
+    // No og:url here: pages that don't set their own would all claim the home page.
+    // (og/twitter title + description are filled from each page's own title/description)
+    siteName: SITE_NAME,
     locale: "th_TH",
     // Default og:image used when a page doesn't set its own (homepage,
     // category, tag, author, search). Article pages override this with
     // their featured image via generateMetadata.
-    images: [
-      {
-        url: "https://cdn.brighttv.co.th/wp-content/uploads/2017/07/04102155/brighttv-default.jpg",
-        width: 1200,
-        height: 630,
-        alt: "BRIGHT TV",
-      },
-    ],
+    images: [DEFAULT_OG_IMAGE],
   },
   twitter: {
     card: "summary_large_image",
-    images: [
-      "https://cdn.brighttv.co.th/wp-content/uploads/2017/07/04102155/brighttv-default.jpg",
-    ],
+    site: TWITTER_SITE,
+    images: [DEFAULT_OG_IMAGE.url],
   },
   icons: { icon: "/logo.svg" },
 };

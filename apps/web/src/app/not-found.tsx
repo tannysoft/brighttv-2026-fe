@@ -1,4 +1,13 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+
+// No canonical / og:url: the layout's "/" would point every 404 at the home page.
+export const metadata: Metadata = {
+  title: "ไม่พบหน้าที่คุณต้องการ",
+  robots: { index: false, follow: true },
+  alternates: { canonical: null },
+  openGraph: { url: undefined },
+};
 
 export default function NotFound() {
   return (

@@ -3,6 +3,7 @@
 // contents/v1 extras, WPCategory, SidebarPost…), so pages don't change and
 // CMS_SOURCE=wordpress still works as a fallback. Cache tags match what the
 // CMS sends to /api/revalidate (apps/cms/src/hooks/revalidate.ts).
+import { categoryPath as categoryUrl } from "./categories";
 import { stringify } from "qs-esm";
 import { cache } from "react";
 import { draftMode } from "next/headers";
@@ -168,6 +169,11 @@ function categoryPath(c: PCategory, all: PCategory[]): string {
   return parts.join("/");
 }
 
+/** Category page URL: its path (/news/politics), except "lotto" (→ /lotto/news). */
+function categoryPage(c: PCategory, all: PCategory[]): string {
+  return safeDecode(c.slug) === "lotto" ? categoryUrl("lotto") : `/${categoryPath(c, all)}`;
+}
+
 function toWPPost(p: PPost, cats: PCategory[]): CMSPost {
   const primary = obj(p.primaryCategory);
   const postCats = (p.categories ?? []).map((c) => obj(c)).filter((c): c is PCategory => Boolean(c));
@@ -197,10 +203,10 @@ function toWPPost(p: PPost, cats: PCategory[]): CMSPost {
     categories: postCats.map((c) => c.id),
     tags: tags.map((t) => t.id),
     primary_category: mainCat
-      ? [{ id: mainCat.id, name: mainCat.name, nicename: mainCat.slug, pathname: `/category/${encodeSlug(mainCat.slug)}` }]
+      ? [{ id: mainCat.id, name: mainCat.name, nicename: mainCat.slug, pathname: categoryPage(mainCat, cats) }]
       : undefined,
     taxonomies: {
-      categories: postCats.map((c) => ({ id: c.id, name: c.name, nicename: c.slug, pathname: `/category/${encodeSlug(c.slug)}` })),
+      categories: postCats.map((c) => ({ id: c.id, name: c.name, nicename: c.slug, pathname: categoryPage(c, cats) })),
       tags: tags.map((t) => ({ id: t.id, name: t.name, slug: encodeSlug(t.slug), pathname: `/tag/${encodeSlug(t.slug)}` })),
     },
     author_info: author?.showByline
@@ -429,7 +435,7 @@ export async function getPostPathById(id: number): Promise<string | null> {
 
 // ---------- taxonomies & users ----------
 
-function toWPCategory(c: PCategory): WPCategory {
+function toWPCategory(c: PCategory, all: PCategory[]): WPCategory {
   return {
     id: c.id,
     count: 0,
@@ -437,19 +443,21 @@ function toWPCategory(c: PCategory): WPCategory {
     slug: encodeSlug(c.slug),
     description: c.description ?? "",
     parent: idOf(c.parent as PCategory | number | null),
-    link: `${SITE_ORIGIN}/category/${encodeSlug(c.slug)}`,
+    link: `${SITE_ORIGIN}${categoryPage(c, all)}`,
     acf: { heading_2: c.seoHeading ?? "", contents: c.seoContent ?? "" },
   };
 }
 
 export async function getCategoryBySlug(slug: string): Promise<WPCategory | null> {
   const s = safeDecode(slug);
-  const c = (await allCategories()).find((x) => x.slug === s);
-  return c ? toWPCategory(c) : null;
+  const all = await allCategories();
+  const c = all.find((x) => x.slug === s);
+  return c ? toWPCategory(c, all) : null;
 }
 
 export async function getCategories(perPage = 100): Promise<WPCategory[]> {
-  return (await allCategories()).slice(0, perPage).map(toWPCategory);
+  const all = await allCategories();
+  return all.slice(0, perPage).map((c) => toWPCategory(c, all));
 }
 
 const toWPTag = (t: PTag): WPTag => ({
@@ -464,6 +472,11 @@ export async function findTagBySlug(slug: string): Promise<PTag | null> {
   const s = safeDecode(slug);
   const res = await cmsSafe<FindResult<PTag>>("/tags", { where: { slug: { equals: s } }, limit: 1, depth: 0 }, ["tags", `tag-${s}`]);
   return res?.docs[0] ?? null;
+}
+
+export async function getTagBySlug(slug: string): Promise<WPTag | null> {
+  const t = await findTagBySlug(slug);
+  return t ? toWPTag(t) : null;
 }
 
 export async function getPopularTags(perPage = 20): Promise<WPTag[]> {
@@ -588,7 +601,8 @@ export async function sitemapTags(page: number, perPage: number): Promise<{ rows
 
 export async function sitemapCategories(): Promise<SitemapRow[]> {
   const now = new Date().toISOString();
-  return (await allCategories()).map((c) => ({ loc: `${SITE_ORIGIN}/category/${encodeSlug(c.slug)}`, lastmod: now }));
+  const all = await allCategories();
+  return all.map((c) => ({ loc: `${SITE_ORIGIN}${categoryPage(c, all)}`, lastmod: now }));
 }
 
 export async function sitemapPages(): Promise<SitemapRow[]> {

@@ -24,6 +24,10 @@ export default function LottoDrawView({
   latest: boolean;
 }) {
   const label = draw ? thaiDate(draw.date) : "";
+  // dates are newest first
+  const at = draw ? dates.indexOf(draw.date) : -1;
+  const older = at >= 0 ? dates[at + 1] : undefined;
+  const newer = at > 0 ? dates[at - 1] : undefined;
   const path = latest || !draw ? "/lotto" : `/lotto/${drawSlug(draw.date)}`;
   const first = prize(draw, "prizeFirst")[0] || "—";
   const near = prize(draw, "prizeFirstNear");
@@ -77,6 +81,29 @@ export default function LottoDrawView({
             {label || "—"}
           </span>
         </p>
+        {/* Previous / next draw: crawlable links through every past draw */}
+        {(older || newer) && (
+          <nav aria-label="งวดก่อนหน้าและถัดไป" className="mt-4 flex flex-wrap gap-2 text-sm font-semibold">
+            {older && (
+              <Link
+                href={`/lotto/${drawSlug(older)}`}
+                rel="prev"
+                className="inline-flex items-center gap-1 h-9 px-4 rounded-full border border-[var(--bt-line)] bg-white text-[var(--bt-navy)] hover:border-[var(--bt-navy)]"
+              >
+                ‹ งวด {thaiDate(older)}
+              </Link>
+            )}
+            {newer && (
+              <Link
+                href={`/lotto/${drawSlug(newer)}`}
+                rel="next"
+                className="inline-flex items-center gap-1 h-9 px-4 rounded-full border border-[var(--bt-line)] bg-white text-[var(--bt-navy)] hover:border-[var(--bt-navy)]"
+              >
+                งวด {thaiDate(newer)} ›
+              </Link>
+            )}
+          </nav>
+        )}
       </header>
 
       {/* Main layout: result + checker sidebar */}
@@ -169,7 +196,7 @@ export default function LottoDrawView({
       {/* Lottery articles */}
       {lottoPosts.length > 0 && (
         <section className="mt-14">
-          <SectionTitle title="ข่าวหวยล่าสุด" href={`/category/lotto`} />
+          <SectionTitle title="ข่าวหวยล่าสุด" href="/lotto/news" />
 
           {/* Featured first post */}
           <div className="grid gap-6 lg:grid-cols-3 mb-10">
@@ -192,7 +219,7 @@ export default function LottoDrawView({
 
           <div className="flex justify-center mt-10">
             <Link
-              href="/category/lotto"
+              href="/lotto/news"
               className="inline-flex items-center gap-2 h-11 px-6 rounded-full bg-[var(--bt-navy)] hover:bg-[var(--bt-navy-700)] !text-white text-sm font-bold transition-colors"
             >
               ดูข่าวหวยทั้งหมด

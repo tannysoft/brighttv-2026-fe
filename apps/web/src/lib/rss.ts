@@ -1,4 +1,4 @@
-// RSS 2.0 feeds (/feed, /category/{slug}/feed, /tag/{slug}/feed) — the URLs
+// RSS 2.0 feeds (/feed, /feed/{category path}, /tag/{slug}/feed) — the URLs
 // WordPress served, still used by aggregators and LINE Today-style readers.
 import { SITE_ORIGIN } from "./env";
 import type { WPPost } from "./wp";
@@ -23,6 +23,12 @@ function rfc822(post: WPPost): string {
   return Number.isNaN(d.getTime()) ? new Date().toUTCString() : d.toUTCString();
 }
 
+/** HTML as a CDATA section ("]]>" split across two sections; no XML-illegal characters). */
+function cdata(html: string): string {
+  const clean = html.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g, "");
+  return `<![CDATA[${clean.replace(/]]>/g, "]]]]><![CDATA[>")}]]>`;
+}
+
 export function rssResponse(opts: { title: string; path: string; description: string; posts: WPPost[] }): Response {
   const feedUrl = `${SITE_ORIGIN}${opts.path === "/" ? "" : opts.path}/feed`;
   const items = opts.posts.map((p) => {
@@ -38,6 +44,7 @@ export function rssResponse(opts: { title: string; path: string; description: st
       `      <dc:creator>${xml(getAuthorName(p))}</dc:creator>`,
       cat ? `      <category>${xml(stripHtml(cat.name))}</category>` : "",
       `      <description>${xml(stripHtml(p.excerpt?.rendered))}</description>`,
+      p.content?.rendered ? `      <content:encoded>${cdata(p.content.rendered)}</content:encoded>` : "",
       img?.url ? `      <media:content url="${xml(img.url)}" medium="image" />` : "",
       "    </item>",
     ]
@@ -45,7 +52,7 @@ export function rssResponse(opts: { title: string; path: string; description: st
       .join("\n");
   });
   const body = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/">
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/">
   <channel>
     <title>${xml(opts.title)}</title>
     <atom:link href="${xml(feedUrl)}" rel="self" type="application/rss+xml" />

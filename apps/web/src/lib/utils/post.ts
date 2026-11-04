@@ -7,6 +7,7 @@
 // _embedded shape (from /wp/v2/posts?_embed or sidebarPostToWPPost).
 import type { SidebarPost, WPPost, WPImageSize } from "@/lib/wp";
 import { stripHtml } from "./text";
+import { categoryPathFromWP } from "../categories";
 
 // ---------- featured image ----------
 
@@ -97,7 +98,7 @@ export function getPrimaryCategory(post: WPPost) {
       name: primary.name,
       slug: primary.nicename,
       taxonomy: "category",
-      link: primary.pathname || `/category/${primary.nicename}`,
+      link: categoryPathFromWP(primary.pathname, primary.nicename),
     };
   }
   // 2. NEW taxonomies.categories from contents/v1.
@@ -110,7 +111,7 @@ export function getPrimaryCategory(post: WPPost) {
       name: c.name,
       slug,
       taxonomy: "category",
-      link: c.pathname || `/category/${slug}`,
+      link: categoryPathFromWP(c.pathname, slug),
     };
   }
   // 3. Legacy _embedded terms.

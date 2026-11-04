@@ -1,116 +1,26 @@
-import { notFound } from "next/navigation";
-import Link from "next/link";
 import type { Metadata } from "next";
-import { getPostsWindow } from "@/lib/wp";
-import { listingWindow, parsePageParam } from "@/lib/utils";
-import ArticleCard from "@/components/ArticleCard";
-import JsonLd from "@/components/JsonLd";
-import { breadcrumbSchema, collectionPageSchema } from "@/lib/schema";
+import { permanentRedirect } from "next/navigation";
+import { parsePageParam } from "@/lib/utils";
+import { pagePath } from "@/lib/categories";
+import TagListing, { tagMetadata, tagPath } from "./TagListing";
 
+// Page 2+ lives at /tag/{slug}/page/{n} (./page/[n]).
 export const revalidate = 300;
 
-type Params = { slug: string };
-
-// Decode percent-encoded Thai slugs for display.
-function safeDecode(s: string): string {
-  try {
-    return decodeURIComponent(s);
-  } catch {
-    return s;
-  }
-}
-
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<Params>;
-}): Promise<Metadata> {
-  const { slug } = await params;
-  const name = safeDecode(slug);
-  return {
-    title: `แท็ก: ${name}`,
-    description: `รวมข่าวทั้งหมดที่ติดแท็ก ${name} จาก BRIGHT TV อัปเดตข่าวล่าสุดครบทุกประเด็น`,
-    alternates: { canonical: `/tag/${slug}` },
-  };
-}
-
-export default async function TagPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<Params>;
+type Props = {
+  params: Promise<{ slug: string }>;
   searchParams: Promise<{ page?: string | string[] }>;
-}) {
+};
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const sp = await searchParams;
-  const page = parsePageParam(sp.page);
-  if (page === null) notFound();
-  const name = safeDecode(slug);
+  return tagMetadata(slug, 1);
+}
 
-  // Single API call — contents/v1 supports `tag_slug` directly, so we
-  // don't need a separate tag-lookup call anymore. Posts come back with
-  // featured_image, author_info, taxonomies inline (no _embed needed).
-  const win = listingWindow(page, 16, 16);
-  const { posts, total } = await getPostsWindow({ tagSlug: slug, offset: win.offset, limit: win.limit });
-  const totalPages = win.totalPages(total);
-  if (!posts.length || page > totalPages) notFound();
-
-  const hasNext = page < totalPages;
-
-  return (
-    <div className="mx-auto max-w-[1320px] px-4 py-8">
-      <JsonLd
-        data={[
-          collectionPageSchema({
-            url: `/tag/${slug}`,
-            name,
-            description: `รวมข่าวที่ติดแท็ก ${name}`,
-          }),
-          breadcrumbSchema([
-            { name: "หน้าแรก", url: "/" },
-            { name: `แท็ก: ${name}`, url: `/tag/${slug}` },
-          ]),
-        ]}
-      />
-      <nav className="text-xs text-[var(--bt-muted)] mb-4 flex items-center gap-2 whitespace-nowrap overflow-hidden">
-        <Link href="/" className="shrink-0 hover:text-[var(--bt-red)]">หน้าแรก</Link>
-        <span className="shrink-0">›</span>
-        <span className="text-[var(--bt-navy)] font-semibold truncate min-w-0">
-          แท็ก: {name}
-        </span>
-      </nav>
-
-      <h1 className="text-3xl sm:text-4xl font-extrabold text-[var(--bt-navy)] mb-2">
-        {name}
-      </h1>
-      <p className="text-sm text-[var(--bt-muted)] mb-8">
-        รวมข่าวทั้งหมดที่ติดแท็ก {name}
-      </p>
-
-      <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
-        {posts.map((p) => (
-          <ArticleCard key={p.id} post={p} variant="feature" />
-        ))}
-      </div>
-
-      <div className="flex justify-center gap-3 mt-10">
-        {page > 1 && (
-          <Link
-            href={`/tag/${slug}?page=${page - 1}`}
-            className="h-10 px-5 rounded-full bg-white border border-[var(--bt-line)] inline-flex items-center text-sm font-semibold text-[var(--bt-navy)] hover:border-[var(--bt-navy)]"
-          >
-            ‹ ก่อนหน้า
-          </Link>
-        )}
-        {hasNext && (
-          <Link
-            href={`/tag/${slug}?page=${page + 1}`}
-            className="h-10 px-5 rounded-full bg-[var(--bt-navy)] hover:bg-[var(--bt-navy-700)] !text-white inline-flex items-center text-sm font-bold transition-colors"
-          >
-            ถัดไป ›
-          </Link>
-        )}
-      </div>
-    </div>
-  );
+export default async function TagPage({ params, searchParams }: Props) {
+  const { slug } = await params;
+  // Old ?page=N links → /tag/{slug}/page/N
+  const q = (await searchParams).page;
+  if (q !== undefined) permanentRedirect(pagePath(tagPath(slug), parsePageParam(q) ?? 1));
+  return <TagListing slug={slug} page={1} />;
 }

@@ -6,6 +6,7 @@ import ArticleCard from "./ArticleCard";
 import PlayBadge from "./PlayBadge";
 import SectionTitle from "./SectionTitle";
 import { NavCategory } from "@/lib/categories";
+import { categoryPath } from "@/lib/categories";
 
 const PLACEHOLDER =
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'><rect width='16' height='9' fill='%23eef3f7'/></svg>";
@@ -23,7 +24,7 @@ export default async function CategoryColumnSection({
 
   return (
     <section>
-      <SectionTitle title={category.name} href={`/category/${category.slug}`} />
+      <SectionTitle title={category.name} href={categoryPath(category.slug)} />
       <ArticleCard post={lead} variant="feature" />
       <div className="grid grid-cols-3 gap-3 sm:gap-4 mt-5 pt-5 border-t border-[var(--bt-line)]">
         {rest.slice(0, 3).map((p) => {
