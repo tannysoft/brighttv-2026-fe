@@ -1,0 +1,52 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "8a21a543bd0ac55148179deddb67ee1c",
+  "name": "brighttv-cms",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  // Run next to the database (PlanetScale Postgres, AWS ap-southeast-1):
+  // the CMS makes many queries per request.
+  "placement": { "region": "aws:ap-southeast-1" },
+  // PlanetScale Postgres through Hyperdrive. Create with
+  //   npx wrangler hyperdrive create brighttv-cms --connection-string="postgres://…"
+  // and paste the id. Local dev / scripts use DATABASE_URL (.env) instead.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "REPLACE_WITH_HYPERDRIVE_ID",
+      "localConnectionString": "postgres://payload:payload@127.0.0.1:54329/brighttv_cms"
+    }
+  ],
+  // Existing bucket (files offloaded from WordPress), public at cdn.brighttv.co.th
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "brighttv"
+    }
+  ],
+  // Forgot-password mail (lib/email.ts). Domain onboarded with
+  // `wrangler email sending enable notify.brighttv.co.th`.
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["no-reply@notify.brighttv.co.th"] }],
+  // Resizes uploads into the sizes the website uses (hooks/image-sizes.ts)
+  "images": { "binding": "IMAGES" },
+  "vars": {
+    "CMS_URL": "https://cms.brighttv.co.th",
+    "WEB_URL": "https://new.brighttv.co.th",
+    "MEDIA_URL": "https://cdn.brighttv.co.th"
+  },
+  // Secrets (wrangler secret put …): PAYLOAD_SECRET, REVALIDATE_SECRET, PREVIEW_SECRET
+  "routes": [{ "pattern": "cms.brighttv.co.th", "custom_domain": true }],
+  "env": {
+    // PAYLOAD_REMOTE=1: scripts on your machine reach the real R2 bucket.
+    "remote": {
+      "r2_buckets": [{ "binding": "R2", "bucket_name": "brighttv", "remote": true }]
+    }
+  }
+}

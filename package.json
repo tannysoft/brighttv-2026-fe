@@ -1,31 +1,24 @@
 {
-  "name": "bright-2026",
-  "version": "0.1.0",
+  "name": "brighttv",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "cf:build": "opennextjs-cloudflare build",
-    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf:upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "cf:types": "wrangler types --env-interface CloudflareEnv ./cloudflare-env.d.ts"
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=22"
   },
-  "dependencies": {
-    "@opennextjs/cloudflare": "^1.0.0",
-    "next": "16.2.2",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "pnpm --filter @brighttv/web dev",
+    "dev:cms": "pnpm --filter @brighttv/cms dev",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "deploy:cms": "pnpm --filter @brighttv/cms run deploy",
+    "deploy:web": "pnpm --filter @brighttv/web run deploy",
+    "migrate:wp": "pnpm --filter @brighttv/cms migrate:wp"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "babel-plugin-react-compiler": "1.0.0",
-    "tailwindcss": "^4",
-    "typescript": "^5",
-    "wrangler": "^4.0.0"
+    "turbo": "^2.11.10"
   }
 }

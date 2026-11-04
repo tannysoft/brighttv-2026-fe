@@ -1,0 +1,63 @@
+/**
+ * Bright TV website (Next.js on Workers via OpenNext).
+ *   pnpm --filter @brighttv/web run preview   # build + local wrangler dev
+ *   pnpm --filter @brighttv/web run deploy    # build + deploy
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "8a21a543bd0ac55148179deddb67ee1c",
+  "name": "brighttv-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "minify": true,
+  // Preview of the new site. Cutover: replace with the live domains below.
+  "routes": [{ "pattern": "new.brighttv.co.th", "custom_domain": true }],
+  // "routes": [
+  //   { "pattern": "www.brighttv.co.th", "custom_domain": true },
+  //   { "pattern": "brighttv.co.th", "custom_domain": true }
+  // ],
+  "vars": {
+    // "wordpress" = old API (rollback switch)
+    "CMS_SOURCE": "payload",
+    // Remove at cutover (robots + X-Robots-Tag noindex on the preview host)
+    "SITE_NOINDEX": "1",
+    "SITE_ORIGIN": "https://www.brighttv.co.th",
+    "WP_API_ORIGIN": "https://www.brighttv.co.th",
+    "CMS_URL": "https://cms.brighttv.co.th",
+    "MEDIA_URL": "https://cdn.brighttv.co.th"
+  },
+  // Secrets (wrangler secret put …): REVALIDATE_SECRET and PREVIEW_SECRET (same
+  // values as the CMS), CMS_PREVIEW_API_KEY (API key of a CMS user, for drafts).
+
+  // OpenNext cache (see open-next.config.ts)
+  //   npx wrangler r2 bucket create brighttv-web-cache
+  //   npx wrangler d1 create brighttv-web-tags        → database_id below
+  //   npx wrangler d1 create brighttv-web-views       → database_id below, then
+  //   npx wrangler d1 migrations apply brighttv-web-views --remote
+  "r2_buckets": [{ "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "brighttv-web-cache" }],
+  "d1_databases": [
+    {
+      "binding": "NEXT_TAG_CACHE_D1",
+      "database_name": "brighttv-web-tags",
+      "database_id": "REPLACE_WITH_D1_ID_TAGS"
+    },
+    {
+      "binding": "VIEWS_DB",
+      "database_name": "brighttv-web-views",
+      "database_id": "REPLACE_WITH_D1_ID_VIEWS",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "NEXT_CACHE_DO_QUEUE", "class_name": "DOQueueHandler" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DOQueueHandler"] }],
+  "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "brighttv-web" }]
+}
