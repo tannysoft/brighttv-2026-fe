@@ -157,8 +157,11 @@ function CrimeFullWidth({ posts }: { posts: import("@/lib/wp").WPPost[] }) {
   );
 }
 
-function PopularSidebar({ posts: raw }: { posts: import("@/lib/wp").SidebarPost[] }) {
-  const posts = raw.slice(0, 5).map(sidebarPostToWPPost);
+async function PopularSidebar({ posts: raw }: { posts: import("@/lib/wp").SidebarPost[] }) {
+  let posts = raw.slice(0, 5).map(sidebarPostToWPPost);
+  // No ranking (source down or no views yet): show the next latest stories
+  // (after the 13 above) so the column is never blank.
+  if (!posts.length) posts = (await getPosts({ perPage: 18 })).slice(13);
   if (!posts.length) return null;
   return (
     <section>
