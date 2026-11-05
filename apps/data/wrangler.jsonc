@@ -1,0 +1,35 @@
+/**
+ * Read-only JSON API over the lottery and horoscope D1 databases, so the
+ * website reads them like it reads the CMS: over HTTP (also during
+ * `next build`, where D1 bindings aren't available) and through a service
+ * binding at runtime. Writers: apps/lotto (cron) and
+ * apps/web/scripts/horoscope/extract.ts. Goes away when this data moves into Payload.
+ *
+ *   pnpm --filter @brighttv/data run dev      # localhost:8788, remote D1
+ *   pnpm --filter @brighttv/data run deploy
+ *
+ * Workers Builds: Path /apps/data, Build: pnpm install --frozen-lockfile,
+ * Deploy: pnpm exec wrangler deploy, Watch paths: apps/data/*
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "8a21a543bd0ac55148179deddb67ee1c",
+  "name": "brighttv-data",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  // https://brighttv-data.tannysoft.workers.dev (public data only)
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "LOTTO_DB",
+      "database_name": "brighttv-lotto",
+      "database_id": "2776ae8c-00b4-45df-8dca-070dfb392830"
+    },
+    {
+      "binding": "HORO_DB",
+      "database_name": "brighttv-horoscope",
+      "database_id": "0359f785-c52c-4863-9309-6069275ab313"
+    }
+  ]
+}

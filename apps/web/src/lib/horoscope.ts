@@ -1,24 +1,9 @@
-// Horoscope data from D1 (`HORO_DB`, written by scripts/horoscope/extract.ts):
+// Horoscope data from the data API (apps/data → D1 `brighttv-horoscope`,
+// written by scripts/horoscope/extract.ts):
 // sections of evergreen articles by day of birth / zodiac, and "Pick a card"
 // piles. The texts are the astrologers' own; every item links to its article.
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { unstable_cache } from "next/cache";
-
-type D1 = {
-  prepare: (sql: string) => {
-    bind: (...v: unknown[]) => {
-      first: <T>() => Promise<T | null>;
-      all: <T>() => Promise<{ results: T[] }>;
-    };
-  };
-};
-
-async function db(): Promise<D1> {
-  const { env } = await getCloudflareContext({ async: true });
-  const d = (env as unknown as { HORO_DB?: D1 }).HORO_DB;
-  if (!d) throw new Error("HORO_DB binding missing");
-  return d;
-}
+import { dataApi } from "./data-api";
 
 // Readers throw on failure (unstable_cache doesn't store a throw), callers get a fallback.
 const safe =
@@ -38,16 +23,8 @@ export type ProfileKind = "day" | "zodiac";
 
 export const getProfile = safe(
   unstable_cache(
-    async (kind: ProfileKind, key: string): Promise<ProfileSection[]> => {
-      const { results } = await (await db())
-        .prepare("SELECT topic, html, title, path, author FROM horo_profile WHERE kind = ?1 AND key = ?2 ORDER BY sort")
-        .bind(kind, key)
-        .all<ProfilePart & { topic: string }>();
-      // Same topic from several articles → one card, in article order.
-      const byTopic = new Map<string, ProfilePart[]>();
-      for (const { topic, ...part } of results) byTopic.set(topic, [...(byTopic.get(topic) ?? []), part]);
-      return [...byTopic].map(([topic, parts]) => ({ topic, parts }));
-    },
+    async (kind: ProfileKind, key: string): Promise<ProfileSection[]> =>
+      (await dataApi<ProfileSection[]>(`/horoscope/profile/${kind}/${encodeURIComponent(key)}`)) ?? [],
     ["horo-profile-v2"],
     { tags: ["horoscope"], revalidate: 86400 },
   ),
@@ -62,27 +39,16 @@ export type PickCard = {
   image: string | null;
   piles: Array<{ label: string; html: string }>;
 };
-type CardRow = Omit<PickCard, "piles"> & { piles: string };
-const toCard = (r: CardRow | null): PickCard | null => (r ? { ...r, piles: JSON.parse(r.piles) } : null);
 
 const cardIds = unstable_cache(
-  async (): Promise<number[]> => {
-    const { results } = await (await db()).prepare("SELECT id FROM horo_cards ORDER BY id").bind().all<{ id: number }>();
-    return results.map((r) => r.id);
-  },
+  async (): Promise<number[]> => (await dataApi<number[]>("/horoscope/cards")) ?? [],
   ["horo-card-ids"],
   { tags: ["horoscope"], revalidate: 86400 },
 );
 
 export const getCard = safe(
   unstable_cache(
-    async (id: number): Promise<PickCard | null> =>
-      toCard(
-        await (await db())
-          .prepare("SELECT id, question, path, author, image, piles FROM horo_cards WHERE id = ?1")
-          .bind(id)
-          .first<CardRow>(),
-      ),
+    async (id: number): Promise<PickCard | null> => dataApi<PickCard>(`/horoscope/cards/${id}`),
     ["horo-card"],
     { tags: ["horoscope"], revalidate: 86400 },
   ),

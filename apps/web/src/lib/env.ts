@@ -47,3 +47,7 @@ export const MEDIA_URL = read("MEDIA_URL", "https://cdn.brighttv.co.th").replace
 
 // "1" on the preview host (new.brighttv.co.th): robots Disallow + X-Robots-Tag noindex.
 export const SITE_NOINDEX = read("SITE_NOINDEX", "") === "1";
+
+// Lottery + horoscope data API (apps/data, worker brighttv-data). On Workers
+// the DATA_API service binding is used; this URL serves build and dev.
+export const DATA_API_URL = read("DATA_API_URL", "https://brighttv-data.tannysoft.workers.dev").replace(/\/$/, "");

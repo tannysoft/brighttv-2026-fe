@@ -593,7 +593,7 @@ export async function getUserBySlug(slug: string): Promise<WPUser | null> {
   return data && data.length ? data[0] : null;
 }
 
-// ---------- lottery (D1, filled by apps/lotto) ----------
+// ---------- lottery (data API → D1, filled by apps/lotto) ----------
 
 /** Latest draw, in the shape the home page block uses (date as Thai text). */
 export async function getLottoLatest(): Promise<LottoResult | null> {

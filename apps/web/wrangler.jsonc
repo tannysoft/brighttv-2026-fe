@@ -59,24 +59,15 @@
       "database_name": "brighttv-web-views",
       "database_id": "1ae8e398-96f0-4944-b250-9371ed54f4e4",
       "migrations_dir": "migrations"
-    },
-    {
-      // Lottery draws, written by the brighttv-lotto job (apps/lotto); read-only here.
-      "binding": "LOTTO_DB",
-      "database_name": "brighttv-lotto",
-      "database_id": "2776ae8c-00b4-45df-8dca-070dfb392830"
-    },
-    {
-      // /horoscope: sections of horoscope articles by day of birth / zodiac
-      // and "Pick a card" piles (scripts/horoscope/extract.ts writes it).
-      "binding": "HORO_DB",
-      "database_name": "brighttv-horoscope",
-      "database_id": "0359f785-c52c-4863-9309-6069275ab313"
     }
   ],
   "durable_objects": {
     "bindings": [{ "name": "NEXT_CACHE_DO_QUEUE", "class_name": "DOQueueHandler" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DOQueueHandler"] }],
-  "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "brighttv-web" }]
+  "services": [
+    { "binding": "WORKER_SELF_REFERENCE", "service": "brighttv-web" },
+    // Lottery + horoscope data (apps/data, read-only API over their D1 databases)
+    { "binding": "DATA_API", "service": "brighttv-data" }
+  ]
 }

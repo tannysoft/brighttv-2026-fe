@@ -7,6 +7,7 @@ Monorepo ของเว็บไซต์และระบบจัดกา�
 | `apps/web` | เว็บไซต์ข่าว (Next.js 16) | Cloudflare Workers ผ่าน OpenNext |
 | `apps/cms` | Payload CMS 3 ระบบหลังบ้านแทน WordPress | Cloudflare Workers + PlanetScale Postgres (ผ่าน Hyperdrive) + R2 (ไฟล์สื่อ) |
 | `apps/lotto` | job ดึงผลสลากจากสำนักงานสลากฯ เก็บลง D1 | Cloudflare Workers (Cron Triggers) + D1 |
+| `apps/data` | API อ่านอย่างเดียวของข้อมูลหวยและดูดวง (ให้เว็บเรียกแบบเดียวกับ CMS) | Cloudflare Workers + D1 |
 
 ```
 packages/
@@ -153,15 +154,23 @@ pnpm --filter @brighttv/web run deploy   # SITE_NOINDEX=1 ใน wrangler.jsonc 
 ## ผลสลาก (`/lotto`)
 
 - `apps/lotto` (worker `brighttv-lotto`) เช็ก API ของสำนักงานสลากฯ ทุก 10 นาที ช่วง 14:00–18:59 น. ทุกวัน แล้วเก็บแต่ละงวดลง D1 `brighttv-lotto` (ตาราง `lotto_draws` หนึ่งแถวต่องวด) เขียนเฉพาะเมื่อมีงวดใหม่หรือผลเปลี่ยน แล้วยิง `/api/revalidate` (tag `lotto`) ให้เว็บอัปเดตทันที
-- เว็บอ่านจาก D1 อย่างเดียว ไม่เรียก API ของสลากฯ เอง: `/lotto` งวดล่าสุด, `/lotto/01-11-2569` แต่ละงวด (รูปแบบเดียวกับ URL เดิมของ WordPress), ตรวจเลขกับงวดที่เปิดอยู่ และเลือกงวดย้อนหลังได้จาก sidebar
+- เว็บไม่ต่อ D1 ตรงและไม่เรียก API ของสลากฯ เอง แต่อ่านผ่าน `apps/data` (ดูหัวข้อถัดไป): `/lotto` งวดล่าสุด, `/lotto/01-11-2569` แต่ละงวด (รูปแบบเดียวกับ URL เดิมของ WordPress), ตรวจเลขกับงวดที่เปิดอยู่ และเลือกงวดย้อนหลังได้จาก sidebar
 - ข้อมูลย้อนหลังตั้งแต่ มี.ค. 2553 (398 งวด ณ พ.ย. 2569) ดึงครั้งเดียวด้วย `pnpm --filter @brighttv/lotto run backfill` (รันซ้ำได้ ทับของเดิม)
 - secret `REVALIDATE_SECRET` ของ `brighttv-lotto` ต้องตรงกับของ `brighttv-web`
 - ทดสอบ job บนเครื่อง: `pnpm --filter @brighttv/lotto run dev` แล้วเปิด `http://localhost:8787/__scheduled`
 
+## API ข้อมูลหวยและดูดวง (`apps/data`)
+
+- worker `brighttv-data` (https://brighttv-data.tannysoft.workers.dev) อ่าน D1 `brighttv-lotto` และ `brighttv-horoscope` แล้วตอบเป็น JSON (GET อย่างเดียว รายการ path อยู่ใน `apps/data/src/index.ts`)
+- เว็บเรียกแบบเดียวกับเรียก CMS (`apps/web/src/lib/data-api.ts`): ตอนรันบน Workers ผ่าน service binding `DATA_API`, ตอน `next build` / `next dev` ผ่าน URL (`DATA_API_URL`) หน้าที่สร้างตอน deploy จึงมีข้อมูลตั้งแต่แรก
+- ต้อง deploy `brighttv-data` ก่อนเว็บ (`pnpm --filter @brighttv/data run deploy`) Workers Builds: Path `/apps/data`, Build `pnpm install --frozen-lockfile`, Deploy `pnpm exec wrangler deploy`, Watch `apps/data/*`
+- ทดสอบบนเครื่อง: `pnpm --filter @brighttv/data run dev` (port 8788, อ่าน D1 จริง) แล้วรันเว็บด้วย `DATA_API_URL=http://localhost:8788`
+- เมื่อย้ายข้อมูลหวย/ดูดวงเข้า Payload: แก้แค่ `lotto.ts` / `horoscope.ts` ให้เรียก API ของ CMS แทน แล้วเลิกใช้ worker นี้
+
 ## หน้าดูดวง (`/horoscope`)
 
-- ส่วน "ดวงประจำตัวคุณ" (ตามวันเกิด/ราศี) และ "Pick a card" อ่านจาก D1 `brighttv-horoscope` ซึ่งตัดมาจากบทความดูดวงของเว็บ (ข้อความของหมอดูเอง มีลิงก์กลับไปบทความทุกชิ้น)
-- สร้าง/อัปเดตข้อมูล: `cd apps/web && node scripts/horoscope/extract.ts` (เพิ่ม `--local` สำหรับ D1 บนเครื่อง, `--dry` ดู SQL ก่อน)
+- ส่วน "ดวงประจำตัวคุณ" (ตามวันเกิด/ราศี) และ "Pick a card" อ่านจาก D1 `brighttv-horoscope` (ผ่าน `apps/data`) ซึ่งตัดมาจากบทความดูดวงของเว็บ (ข้อความของหมอดูเอง มีลิงก์กลับไปบทความทุกชิ้น)
+- สร้าง/อัปเดตข้อมูล: `cd apps/web && node scripts/horoscope/extract.ts` (เพิ่ม `--local` สำหรับ D1 บนเครื่องของ `apps/data`, `--dry` ดู SQL ก่อน)
   - บทความที่ใช้ทำ "ดวงประจำตัว" เลือกไว้ใน `PROFILE_SOURCES` ในสคริปต์ (เฉพาะเรื่องที่ไม่ผูกกับวันเวลา เช่น นิสัย เลขมงคล สีเสริมดวง คู่แท้) ถ้ามีบทความใหม่แบบแยก 7 วันเกิด/12 ราศี ให้เพิ่ม id และหัวข้อแล้วรันใหม่
   - Pick a card ดึงทุกบทความที่แบ่งเป็น "กอง 1/2/3" อัตโนมัติ (ตัดคำถามที่ผูกกับช่วงเวลาออก) คำถามประจำวันเปลี่ยนทุกวันตามลำดับ
 - ตัวเลขศาสตร์และสีประจำวันเกิดอยู่ใน `apps/web/src/lib/horoscope-data.ts`

@@ -234,7 +234,7 @@ ${cardRows.map((r) => `INSERT INTO horo_cards VALUES ${r};`).join("\n")}
 writeFileSync(".horoscope.sql", sql);
 console.log(`wrote .horoscope.sql (${(sql.length / 1024).toFixed(0)} KB)`);
 if (!dry) {
-  execFileSync("npx", ["wrangler", "d1", "execute", "brighttv-horoscope", local ? "--local" : "--remote", "--file", ".horoscope.sql", "-y"], {
+  execFileSync("npx", ["wrangler", "d1", "execute", "brighttv-horoscope", "-c", "../data/wrangler.jsonc", local ? "--local" : "--remote", "--file", ".horoscope.sql", "-y"], {
     stdio: "inherit",
   });
 }
