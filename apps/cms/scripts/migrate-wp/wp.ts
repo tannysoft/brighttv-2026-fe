@@ -1,7 +1,13 @@
 /**
- * Minimal WordPress REST client for the import: retries, paging, and
- * optional Application Password auth (needed for drafts, private posts and
- * user emails — the public API only returns published content).
+ * Minimal WordPress REST client for the import: retries and paging.
+ *
+ * With WP_MIGRATE_KEY (the bright-migrate plugin, scripts/wp-plugin) every
+ * core REST read goes through the plugin's proxy, which runs it as an
+ * administrator: drafts/pending/private/future posts, raw content, every user
+ * with email and role. The plugin also exports custom fields, SEO, terms,
+ * redirects, menus and options. Without it the public API only returns
+ * published content (an Application Password via WP_USER/WP_APP_PASSWORD
+ * also works for drafts).
  */
 export type WPRendered = { rendered: string; raw?: string }
 
@@ -79,7 +85,11 @@ export class WordPress {
   }
 
   get authenticated() {
-    return Boolean(this.headers.authorization)
+    return Boolean(this.headers.authorization || this.migrateKey)
+  }
+
+  private get pluginBase() {
+    return `${this.base}/wp-json/bright-migrate/v1`
   }
 
   async fetch(url: string, tries = 6, extra: Record<string, string> = {}): Promise<Response> {
@@ -98,9 +108,12 @@ export class WordPress {
   }
 
   async json<T>(path: string, params: Record<string, string | number | undefined> = {}) {
-    const url = new URL(path.startsWith('http') ? path : `${this.api}${path}`)
+    // Core routes through the plugin's admin proxy when it's configured.
+    const viaProxy = Boolean(this.migrateKey) && !path.startsWith('http')
+    const url = new URL(path.startsWith('http') ? path : viaProxy ? `${this.pluginBase}/proxy` : `${this.api}${path}`)
+    if (viaProxy) url.searchParams.set('route', `/wp/v2${path}`)
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') url.searchParams.set(k, String(v))
-    const res = await this.fetch(url.toString())
+    const res = await this.fetch(url.toString(), 6, viaProxy ? { 'x-migrate-key': this.migrateKey! } : {})
     if (!res.ok) throw new Error(`WordPress ${res.status}: ${url}`)
     return {
       data: (await res.json()) as T,
@@ -149,15 +162,54 @@ export class WordPress {
     }
   }
 
-  /** Yoast fields from the bright-migrate plugin (scripts/wp-plugin); null when it isn't installed. */
-  async seo(ids: number[]): Promise<Record<string, SeoExport> | null> {
-    if (!this.migrateKey || !ids.length) return null
-    const res = await this.fetch(`${this.base}/wp-json/bright-migrate/v1/seo?ids=${ids.join(',')}`, 4, {
-      'x-migrate-key': this.migrateKey,
-    })
-    if (!res.ok) return null
-    return (await res.json()) as Record<string, SeoExport>
+  /** GET a bright-migrate plugin endpoint; null when the plugin isn't configured or answers an error. */
+  async plugin<T>(endpoint: string, params: Record<string, string | number> = {}): Promise<T | null> {
+    if (!this.migrateKey) return null
+    const url = new URL(`${this.pluginBase}/${endpoint}`)
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v))
+    const res = await this.fetch(url.toString(), 4, { 'x-migrate-key': this.migrateKey })
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) throw new Error(`bright-migrate plugin refused the key (HTTP ${res.status}) — check WP_MIGRATE_KEY`)
+      return null
+    }
+    return (await res.json()) as T
   }
+
+  /** Yoast fields of up to 100 items; null when the plugin isn't installed. */
+  seo(ids: number[]) {
+    return ids.length ? this.plugin<Record<string, SeoExport>>('seo', { ids: ids.join(',') }) : Promise.resolve(null)
+  }
+
+  /** Every custom field (raw ACF + other meta) of up to 100 items. */
+  meta(ids: number[]) {
+    return ids.length ? this.plugin<Record<string, MetaExport>>('meta', { ids: ids.join(',') }) : Promise.resolve(null)
+  }
+
+  /** Profile custom fields of up to 100 users. */
+  userMeta(ids: number[]) {
+    return ids.length ? this.plugin<Record<string, UserMetaExport>>('user-meta', { ids: ids.join(',') }) : Promise.resolve(null)
+  }
+
+  /** Every term of a taxonomy with term meta, raw ACF and Yoast term SEO. */
+  async terms(taxonomy: string): Promise<TermExport[] | null> {
+    if (!this.migrateKey) return null
+    const all: TermExport[] = []
+    for (let page = 1; ; page++) {
+      const items = await this.plugin<TermExport[]>('terms', { taxonomy, page })
+      if (!items) return page === 1 ? null : all
+      all.push(...items)
+      if (items.length < 500) return all
+    }
+  }
+}
+
+type Fields = Record<string, unknown>
+export type MetaExport = { acf: Fields; meta: Fields; template: string | null; password_protected: boolean }
+export type UserMetaExport = { login: string; registered: string; url: string | null; roles: string[]; acf: Fields; meta: Fields }
+export type TermExport = WPTerm & {
+  acf: Fields
+  meta: Fields
+  seo: { title?: string; description?: string; focusKeyword?: string; canonical?: string; noindex?: boolean } | null
 }
 
 export type SeoExport = {
@@ -167,6 +219,8 @@ export type SeoExport = {
   canonical: string | null
   noindex: boolean
   nofollow: boolean
+  ogTitle?: string | null
+  ogDescription?: string | null
   ogImage: string | null
   primaryCategory: number | null
 }

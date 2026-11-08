@@ -7,6 +7,7 @@ import { postPath } from '../lib/paths'
 import { renderContentHtml } from '../hooks/content-html'
 import { revalidateAfterChange, revalidateAfterDelete } from '../hooks/revalidate'
 import { updateTagCounts, updateTagCountsOnDelete } from '../hooks/tag-counts'
+import { wpFields } from '../fields/wp-fields'
 
 /**
  * News stories and articles (WordPress `post`). Imported stories keep their
@@ -168,5 +169,6 @@ export const Posts: CollectionConfig = {
       ],
       admin: { position: 'sidebar' },
     },
+    wpFields,
   ],
 }

@@ -7,10 +7,18 @@
  *   pnpm migrate:wp --since=2026-11-01                # delta: changed since a date (upsert)
  *   pnpm migrate:wp --steps=posts --ids=1745050,1745038
  *   pnpm migrate:wp --steps=files                     # check every media file exists in R2
+ *   pnpm migrate:wp --steps=inventory                 # what WordPress has (plugin) → .migrate/wp-inventory.json
+ *   pnpm migrate:wp --steps=extras                    # redirects, menus, options (plugin) → .migrate/*.json
  *   DATABASE_URL=postgres://…planetscale… pnpm migrate:wp   # straight into PlanetScale
  *
  * Steps (dependency order): users → categories → positions → tags → media →
- * posts → programs → lotteries → pages → counts → sequences (→ files, only when asked).
+ * posts → programs → lotteries → pages → counts → sequences (→ files,
+ * inventory, extras: only when asked).
+ *
+ * With WP_MIGRATE_KEY (scripts/wp-plugin/bright-migrate.php installed) the
+ * import also gets drafts/pending/private/scheduled items, every user with
+ * email and role, all custom fields (kept in `wpFields` unless they have a
+ * field of their own), Yoast SEO of items and categories.
  * Re-running is safe: existing ids are skipped (or updated with --update /
  * --since); posts and media resume at the last finished month (.migrate/state.json).
  *
@@ -22,7 +30,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { getPayload, type Payload } from 'payload'
 import { editorConfigFactory } from '@payloadcms/richtext-lexical'
-import { WordPress, type SeoExport, type WPMedia, type WPPost, type WPTerm, type WPUser } from './wp'
+import { WordPress, type MetaExport, type SeoExport, type TermExport, type WPMedia, type WPPost, type WPTerm, type WPUser } from './wp'
 import { htmlToLexical, mediaPathKeys, resolveMediaUrl, type MediaIndex } from './html-to-lexical'
 import { cleanExcerpt, decodeEntities, decodeSlug, gmt, stripHtml } from './text'
 import { copyFiles } from './files'
@@ -123,6 +131,33 @@ async function bulkUpsert(
   }
 }
 
+// ---------- custom fields kept as wpFields ----------
+type Obj = Record<string, unknown>
+const isEmpty = (v: unknown) =>
+  v === null || v === undefined || v === '' || v === false || (Array.isArray(v) && !v.length) || (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v as Obj).length)
+/**
+ * Custom fields without a Payload field of their own: raw ACF values minus the
+ * mapped ones, plus other meta. Empty values are dropped; null when nothing is left.
+ */
+function wpFieldsOf(acf: Obj | undefined, meta: Obj | undefined, mapped: string[], extra: Obj = {}): Obj | null {
+  const out: Obj = {}
+  const a = Object.fromEntries(Object.entries(acf ?? {}).filter(([k, v]) => !mapped.includes(k) && !isEmpty(v)))
+  const m = Object.fromEntries(Object.entries(meta ?? {}).filter(([k, v]) => !mapped.includes(k) && !(k in (acf ?? {})) && !isEmpty(v)))
+  if (Object.keys(a).length) out.acf = a
+  if (Object.keys(m).length) out.meta = m
+  for (const [k, v] of Object.entries(extra)) if (!isEmpty(v)) out[k] = v
+  return Object.keys(out).length ? out : null
+}
+/** ACF / meta keys that already have a field in Payload, per collection. */
+const MAPPED: Record<string, string[]> = {
+  posts: ['youtube_id', 'gallery_images', 'post_views_count'],
+  programs: ['daily_onair'],
+  lotteries: ['date_prize', 'first_prize', 'nearby_first_prize', 'second_prize', 'third_prize', 'fourth_prize', 'fifth_prize', 'first_3_prize', 'last_3_prize', 'last_2_prize'],
+  pages: [],
+  users: ['author_image', 'description', 'first_name', 'last_name', 'nickname'],
+  categories: ['heading_2', 'contents'],
+}
+
 // ---------- users ----------
 const ROLE: Record<string, 'admin' | 'editor' | 'author'> = { administrator: 'admin', editor: 'editor' }
 
@@ -136,6 +171,7 @@ async function migrateUsers(payload: Payload, wp: WordPress, media: () => Promis
   const params = wp.authenticated ? { context: 'edit' } : {}
   let n = 0
   for await (const { items } of wp.pages<WPUser>('/users', params)) {
+    const extra = await wp.userMeta(items.map((u) => u.id))
     for (const u of items) {
       if (have.has(u.id) && !UPDATE) continue
       const role = u.roles?.map((r) => ROLE[r]).find(Boolean) ?? 'author'
@@ -151,6 +187,11 @@ async function migrateUsers(payload: Payload, wp: WordPress, media: () => Promis
         show_byline: true,
         avatar_id: avatar,
         email: (u.email || `user-${u.id}@users.brighttv.invalid`).toLowerCase(),
+        wp_fields: (() => {
+          const x = extra?.[u.id]
+          const f = x && wpFieldsOf(x.acf, x.meta, MAPPED.users, { login: x.login, registered: x.registered, url: x.url, roles: x.roles })
+          return f ? JSON.stringify(f) : null
+        })(),
       }
       const cols = Object.keys(row)
       const set = cols.filter((c) => c !== 'id' && c !== 'email' && c !== 'role').map((c) => `"${c}" = EXCLUDED."${c}"`)
@@ -162,15 +203,17 @@ async function migrateUsers(payload: Payload, wp: WordPress, media: () => Promis
       n++
     }
   }
-  log(`users: ${n} written (no passwords — use "Forgot password" at /admin)`)
+  log(`users: ${n} written (no passwords — use "Forgot password" at /admin)${wp.migrateKey ? '' : '; public API: only people with published posts, no emails'}`)
 }
 
 // ---------- taxonomies ----------
 async function migrateCategories(payload: Payload, wp: WordPress) {
   const have = await existingIds(payload, 'categories')
-  const all: WPTerm[] = []
-  for await (const { items } of wp.pages<WPTerm>('/categories', { hide_empty: 'false', _fields: 'id,name,slug,description,parent,count,acf' }))
-    all.push(...items)
+  // The plugin adds term meta and Yoast term SEO; the public API has the ACF fields only.
+  const all: (WPTerm & Partial<TermExport>)[] = (await wp.terms('category')) ?? []
+  if (!all.length)
+    for await (const { items } of wp.pages<WPTerm>('/categories', { hide_empty: 'false', _fields: 'id,name,slug,description,parent,count,acf' }))
+      all.push(...items)
   // Parents first so the relation exists.
   const depth = (c: WPTerm): number => (c.parent ? 1 + depth(all.find((p) => p.id === c.parent) ?? ({} as WPTerm)) : 0)
   all.sort((a, b) => depth(a) - depth(b))
@@ -183,6 +226,16 @@ async function migrateCategories(payload: Payload, wp: WordPress) {
       seoHeading: acf.heading_2 || undefined,
       seoContent: acf.contents || undefined,
       parent: c.parent || undefined,
+      meta: c.seo
+        ? {
+            title: yoastTitle(c.seo.title ?? null, decodeEntities(c.name)),
+            description: c.seo.description && !c.seo.description.includes('%%') ? c.seo.description : undefined,
+            focusKeyword: c.seo.focusKeyword || undefined,
+            canonical: c.seo.canonical || undefined,
+            noindex: Boolean(c.seo.noindex),
+          }
+        : undefined,
+      wpFields: wpFieldsOf(acf as Obj, c.meta, MAPPED.categories) ?? undefined,
     }
     if (have.has(c.id)) {
       if (UPDATE) await payload.update({ collection: 'categories', id: c.id, data: data as never, overrideAccess: true, context: ctx })
@@ -417,13 +470,14 @@ async function migrateContent(
     ...(SINCE ? { modified_after: SINCE } : {}),
   }
 
-  const one = (seo: Record<string, SeoExport> | null) => async (p: WPPost) => {
+  const one = (seo: Record<string, SeoExport> | null, metas: Record<string, MetaExport> | null) => async (p: WPPost) => {
     const exists = have.has(p.id)
     if (exists && !UPDATE) return
     try {
       const title = decodeEntities(p.title.rendered).trim() || `(ไม่มีชื่อ ${p.id})`
       const featured = await resolveFeatured(wp, p.featured_media, media)
-      const acf = acfOf(p)
+      // The plugin's raw ACF covers fields not shown in the REST API.
+      const acf = { ...acfOf(p), ...(metas?.[p.id]?.acf ?? {}) }
       const s = seo?.[p.id]
       const common = {
         title,
@@ -431,8 +485,13 @@ async function migrateContent(
         featuredImage: featured,
         publishedAt: gmt(p.date_gmt),
         _status: WP_STATUS[p.status] ?? 'draft',
-        meta: seoMeta(s, title, p.link),
-        createdAt: gmt(p.date_gmt),
+        meta: { ...seoMeta(s, title, p.link), image: s?.ogImage ? (resolveMediaUrl(s.ogImage, media) ?? undefined) : undefined },
+        createdAt: gmt(p.date_gmt) ?? gmt(p.modified_gmt),
+        // Everything else WordPress stored for this item (raw ACF + post meta).
+        wpFields: (() => {
+          const x = metas?.[p.id]
+          return wpFieldsOf(acf, x?.meta, MAPPED[kind], { template: x?.template, passwordProtected: x?.password_protected }) ?? undefined
+        })(),
       }
       let data: Record<string, unknown>
       if (kind === 'lotteries') {
@@ -496,11 +555,14 @@ async function migrateContent(
         created++
       }
       // Keep WordPress's timestamps (the import is not an edit) — sitemaps use them.
-      await pg(payload).query(`UPDATE "${kind}" SET updated_at = $2, created_at = $3 WHERE id = $1`, [p.id, gmt(p.modified_gmt), gmt(p.date_gmt)])
+      // Drafts that were never published have no date_gmt.
+      const createdAt = gmt(p.date_gmt) ?? gmt(p.modified_gmt) ?? new Date().toISOString()
+      const updatedAt = gmt(p.modified_gmt) ?? createdAt
+      await pg(payload).query(`UPDATE "${kind}" SET updated_at = $2, created_at = $3 WHERE id = $1`, [p.id, updatedAt, createdAt])
       await pg(payload).query(`UPDATE "_${kind}_v" SET updated_at = $2, created_at = $3, version_updated_at = $2, version_created_at = $3 WHERE parent_id = $1 AND latest`, [
         p.id,
-        gmt(p.modified_gmt),
-        gmt(p.date_gmt),
+        updatedAt,
+        createdAt,
       ])
     } catch (err) {
       failed++
@@ -515,8 +577,12 @@ async function migrateContent(
     const batch = items.slice(0, Math.max(0, LIMIT - seen))
     seen += batch.length
     const todo = batch.filter((p) => UPDATE || !have.has(p.id))
-    const seo = kind === 'pages' ? null : await wp.seo(todo.map((p) => p.id)).catch((): null => null)
-    await pool(todo, CONCURRENCY, one(seo))
+    const ids = todo.map((p) => p.id)
+    const [seo, metas] = await Promise.all([
+      kind === 'pages' ? null : wp.seo(ids).catch((): null => null),
+      wp.meta(ids).catch((): null => null),
+    ])
+    await pool(todo, CONCURRENCY, one(seo, metas))
   }
   const rate = () => {
     const mins = (Date.now() - started) / 60000
@@ -607,7 +673,7 @@ log(
     `${wp.migrateKey ? '; Yoast via bright-migrate plugin' : '; no WP_MIGRATE_KEY: Yoast titles/descriptions skipped'}`,
 )
 
-const dbSteps = [...steps].filter((s) => s !== 'files')
+const dbSteps = [...steps].filter((s) => !['files', 'inventory', 'extras'].includes(s))
 if (dbSteps.length) {
   const { default: config } = await import('../../src/payload.config')
   const payload = await getPayload({ config })
@@ -630,6 +696,27 @@ if (dbSteps.length) {
   }
   if (steps.has('counts') || steps.has('posts')) await recountTags(payload)
   if (steps.has('sequences') || content.length || steps.has('media') || steps.has('tags')) await fixSequences(payload)
+}
+
+// What WordPress holds, for mapping custom fields / post types (plugin only).
+if (steps.has('inventory')) {
+  const inv = await wp.plugin<Record<string, unknown>>('inventory')
+  if (!inv) throw new Error('inventory needs the bright-migrate plugin and WP_MIGRATE_KEY')
+  fs.writeFileSync(path.join(WORK_DIR, 'wp-inventory.json'), JSON.stringify(inv, null, 2))
+  const types = inv.post_types as Record<string, { counts: Record<string, number> }>
+  for (const [name, t] of Object.entries(types))
+    log(`${name}: ${Object.entries(t.counts).filter(([, n]) => Number(n) > 0).map(([s, n]) => `${s} ${n}`).join(', ')}`)
+  log(`ACF field groups: ${(inv.acf_field_groups as unknown[]).length} → .migrate/wp-inventory.json`)
+}
+
+// Redirects (Redirection plugin), menus and options, as JSON files to map by hand.
+if (steps.has('extras')) {
+  for (const name of ['redirects', 'menus', 'options'] as const) {
+    const data = await wp.plugin<unknown>(name)
+    if (data === null) throw new Error(`${name} needs the bright-migrate plugin and WP_MIGRATE_KEY`)
+    fs.writeFileSync(path.join(WORK_DIR, `wp-${name}.json`), JSON.stringify(data, null, 2))
+    log(`${name}: ${Array.isArray(data) ? data.length + ' items' : 'saved'} → .migrate/wp-${name}.json`)
+  }
 }
 
 // Files live in the R2 bucket, not the database, see files.ts.

@@ -4,6 +4,7 @@ import { articleEditor } from '../lib/editor'
 import { slugFrom } from '../lib/slug'
 import { renderContentHtml } from '../hooks/content-html'
 import { revalidateAfterChange, revalidateAfterDelete } from '../hooks/revalidate'
+import { wpFields } from '../fields/wp-fields'
 
 /**
  * Static pages (WordPress `page`), e.g. privacy policy. A page with the slug
@@ -44,5 +45,6 @@ export const Pages: CollectionConfig = {
     },
     { name: 'featuredImage', label: 'ภาพหน้าปก', type: 'upload', relationTo: 'media', admin: { position: 'sidebar' } },
     { name: 'publishedAt', label: 'วันที่เผยแพร่', type: 'date', admin: { position: 'sidebar' } },
+    wpFields,
   ],
 }

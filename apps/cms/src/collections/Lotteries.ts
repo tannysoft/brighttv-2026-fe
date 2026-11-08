@@ -3,6 +3,7 @@ import { isEditorOrAdmin, publishedOrStaff } from '../access'
 import { slugFrom } from '../lib/slug'
 import { WEB_URL } from '../lib/env'
 import { revalidateAfterChange, revalidateAfterDelete } from '../hooks/revalidate'
+import { wpFields } from '../fields/wp-fields'
 
 const prize = (name: string, label: string, description?: string): Field => ({
   name,
@@ -70,5 +71,6 @@ export const Lotteries: CollectionConfig = {
     },
     { name: 'tags', label: 'แท็ก', type: 'relationship', relationTo: 'tags', hasMany: true, admin: { position: 'sidebar' } },
     { name: 'publishedAt', label: 'วันที่เผยแพร่', type: 'date', admin: { position: 'sidebar', date: { pickerAppearance: 'dayAndTime' } } },
+    wpFields,
   ],
 }

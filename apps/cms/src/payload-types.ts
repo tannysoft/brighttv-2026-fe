@@ -188,6 +188,18 @@ export interface Post {
   author?: (number | null) | User;
   sticky?: boolean | null;
   format?: ('standard' | 'video' | 'gallery') | null;
+  /**
+   * Custom field จากเว็บเดิมที่ยังไม่มีช่องของตัวเอง (อ่านอย่างเดียว)
+   */
+  wpFields?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   meta?: {
     title?: string | null;
     description?: string | null;
@@ -273,6 +285,18 @@ export interface Category {
    * เช่น หมวดที่ใช้จัดหน้าเว็บเท่านั้น
    */
   noindex?: boolean | null;
+  /**
+   * Custom field จากเว็บเดิมที่ยังไม่มีช่องของตัวเอง (อ่านอย่างเดียว)
+   */
+  wpFields?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   meta?: {
     title?: string | null;
     description?: string | null;
@@ -348,6 +372,18 @@ export interface User {
   showByline?: boolean | null;
   bio?: string | null;
   avatar?: (number | null) | Media;
+  /**
+   * Custom field จากเว็บเดิมที่ยังไม่มีช่องของตัวเอง (อ่านอย่างเดียว)
+   */
+  wpFields?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
   enableAPIKey?: boolean | null;
@@ -405,6 +441,18 @@ export interface Program {
   publishedAt?: string | null;
   positions?: (number | Position)[] | null;
   author?: (number | null) | User;
+  /**
+   * Custom field จากเว็บเดิมที่ยังไม่มีช่องของตัวเอง (อ่านอย่างเดียว)
+   */
+  wpFields?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   meta?: {
     title?: string | null;
     description?: string | null;
@@ -472,6 +520,18 @@ export interface Lottery {
   slug: string;
   tags?: (number | Tag)[] | null;
   publishedAt?: string | null;
+  /**
+   * Custom field จากเว็บเดิมที่ยังไม่มีช่องของตัวเอง (อ่านอย่างเดียว)
+   */
+  wpFields?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   meta?: {
     title?: string | null;
     description?: string | null;
@@ -517,6 +577,18 @@ export interface Page {
   slug: string;
   featuredImage?: (number | null) | Media;
   publishedAt?: string | null;
+  /**
+   * Custom field จากเว็บเดิมที่ยังไม่มีช่องของตัวเอง (อ่านอย่างเดียว)
+   */
+  wpFields?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   meta?: {
     title?: string | null;
     description?: string | null;
@@ -659,6 +731,7 @@ export interface PostsSelect<T extends boolean = true> {
   author?: T;
   sticky?: T;
   format?: T;
+  wpFields?: T;
   meta?:
     | T
     | {
@@ -689,6 +762,7 @@ export interface ProgramsSelect<T extends boolean = true> {
   publishedAt?: T;
   positions?: T;
   author?: T;
+  wpFields?: T;
   meta?:
     | T
     | {
@@ -724,6 +798,7 @@ export interface LotteriesSelect<T extends boolean = true> {
   slug?: T;
   tags?: T;
   publishedAt?: T;
+  wpFields?: T;
   meta?:
     | T
     | {
@@ -750,6 +825,7 @@ export interface PagesSelect<T extends boolean = true> {
   slug?: T;
   featuredImage?: T;
   publishedAt?: T;
+  wpFields?: T;
   meta?:
     | T
     | {
@@ -779,6 +855,7 @@ export interface CategoriesSelect<T extends boolean = true> {
   order?: T;
   showInMenu?: T;
   noindex?: T;
+  wpFields?: T;
   meta?:
     | T
     | {
@@ -859,6 +936,7 @@ export interface UsersSelect<T extends boolean = true> {
   showByline?: T;
   bio?: T;
   avatar?: T;
+  wpFields?: T;
   updatedAt?: T;
   createdAt?: T;
   enableAPIKey?: T;

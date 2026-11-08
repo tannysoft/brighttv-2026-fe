@@ -2,6 +2,7 @@ import type { CollectionConfig } from 'payload'
 import { isAdmin, isAdminField, selfOrAdmin } from '../access'
 import { slugFrom } from '../lib/slug'
 import { revalidateAfterChange } from '../hooks/revalidate'
+import { wpFields } from '../fields/wp-fields'
 
 /**
  * Staff accounts. Also the post author (WordPress `users`): name, slug,
@@ -74,5 +75,6 @@ export const Users: CollectionConfig = {
     },
     { name: 'bio', label: 'ประวัติย่อ', type: 'textarea' },
     { name: 'avatar', label: 'รูปโปรไฟล์', type: 'upload', relationTo: 'media' },
+    wpFields,
   ],
 }

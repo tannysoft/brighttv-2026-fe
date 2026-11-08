@@ -5,6 +5,7 @@ import { slugFrom } from '../lib/slug'
 import { WEB_URL } from '../lib/env'
 import { renderContentHtml } from '../hooks/content-html'
 import { revalidateAfterChange, revalidateAfterDelete } from '../hooks/revalidate'
+import { wpFields } from '../fields/wp-fields'
 
 /** WordPress post type `program` (TV programme pages): /program/{slug}. */
 export const Programs: CollectionConfig = {
@@ -67,5 +68,6 @@ export const Programs: CollectionConfig = {
     },
     { name: 'positions', label: 'ตำแหน่งบนหน้าเว็บ', type: 'relationship', relationTo: 'positions', hasMany: true, admin: { position: 'sidebar' } },
     { name: 'author', label: 'ผู้เขียน', type: 'relationship', relationTo: 'users', admin: { position: 'sidebar' } },
+    wpFields,
   ],
 }

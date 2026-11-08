@@ -97,8 +97,15 @@ pnpm migrate:wp --steps=files                # ตรวจว่าไฟล์
 
 - ข่าวและรูปดึงทีละเดือน (WordPress ไม่ต้อง OFFSET ลึก) รันซ้ำได้ จำเดือนที่ทำถึงไว้ใน `.migrate/state.json` (`--from=2020-01` เริ่มที่เดือนที่กำหนด, `--restart` เริ่มใหม่)
 - ตัวเลือก: `--update` เขียนทับของเดิม, `--ids=1,2,3`, `--concurrency=6`, `--limit=N`
-- **Yoast**: ค่า SEO ไม่เปิดผ่าน REST — ติดตั้ง `scripts/wp-plugin/bright-migrate.php` เป็น mu-plugin บน WordPress, ตั้ง `define('BRIGHT_MIGRATE_KEY', '...')` ใน wp-config.php และใส่ค่าเดียวกันใน `WP_MIGRATE_KEY` ของ `apps/cms/.env` (ไม่ติดตั้งก็ย้ายได้ แต่จะไม่มี SEO title/description ที่ตั้งเอง และหมวดหลักจะใช้ค่าจาก REST)
-- `WP_USER` + `WP_APP_PASSWORD` (Application Password) ใน `.env` เพื่อดึงฉบับร่างและอีเมลผู้ใช้ด้วย ถ้าไม่ใส่จะได้เฉพาะที่เผยแพร่แล้ว
+- **plugin `bright-migrate`** (แนะนำ): REST สาธารณะให้แค่เนื้อหาที่เผยแพร่แล้ว plugin นี้ดึงส่วนที่เหลือทั้งหมดแบบอ่านอย่างเดียว
+  - ฉบับร่าง / รออนุมัติ / ส่วนตัว / ตั้งเวลา, ผู้ใช้ทุกคนพร้อมอีเมลและ role (ไม่มีรหัสผ่าน)
+  - custom field ทุกตัว (ACF ค่าดิบ + post/user/term meta) ตัวที่ยังไม่มีช่องใน Payload เก็บใน `wpFields` (เห็นใน admin เฉพาะคนที่ login)
+  - Yoast SEO ของข่าวและหมวด, redirect ของปลั๊กอิน Redirection, เมนู และ ACF options
+  - ติดตั้ง: คัดลอก `apps/cms/scripts/wp-plugin/bright-migrate.php` ไปที่ `wp-content/mu-plugins/` แล้วเพิ่ม `define('BRIGHT_MIGRATE_KEY', '<ค่าสุ่มยาว ≥ 32 ตัว>');` ใน wp-config.php และใส่ค่าเดียวกันเป็น `WP_MIGRATE_KEY` ใน `apps/cms/.env` (สร้างค่าด้วย `openssl rand -hex 32`) ลบไฟล์และ define ทิ้งหลัง cutover
+  - ค่าลับไม่ถูกส่งออก: รหัสผ่าน, session, application password, 2FA, meta ที่ชื่อมี token/secret
+- ก่อนย้ายจริงให้ดูว่า WordPress มีอะไรบ้าง: `pnpm migrate:wp --steps=inventory` (post type × สถานะ, ACF field groups, custom field ที่ใช้จริง → `.migrate/wp-inventory.json`) และ `--steps=extras` (redirect, เมนู, options → `.migrate/wp-*.json`) ใช้ตัดสินว่า field ไหนควรมีช่องของตัวเองใน Payload
+- ไม่ติดตั้ง plugin ก็ย้ายได้ แต่จะได้เฉพาะที่เผยแพร่แล้ว ไม่มี SEO ที่ตั้งเองและไม่มี custom field ที่ไม่เปิดใน REST (`WP_USER` + `WP_APP_PASSWORD` ใช้แทนได้เฉพาะเรื่องฉบับร่างและอีเมล)
+- ซ้อมบนเครื่อง: `docker run -d --name brighttv-cms-pg -e POSTGRES_USER=payload -e POSTGRES_PASSWORD=payload -e POSTGRES_DB=brighttv_cms -p 54329:5432 postgres:17-alpine` แล้ว `pnpm migrate:db` และ `pnpm migrate:wp --steps=... --limit=50`
 - ภาพที่หาในคลังสื่อไม่เจอและเรื่องที่ย้ายไม่สำเร็จ บันทึกใน `.migrate/*-warnings.log`
 - ขั้น `sequences` ตั้ง id ถัดไปของเนื้อหาที่สร้างใน CMS ให้เริ่มที่ 10,000,000 ไม่ชนกับ id ที่ WordPress ยังออกให้ระหว่างรอ cutover
 - ไฟล์สื่อที่ WordPress มีหลาย record ชี้ไฟล์เดียวกัน นำเข้าแค่รายการแรก (รายการที่ข้ามอยู่ใน `.migrate/media-skipped.log` ข่าวที่ใช้จะจับคู่ตาม path ไฟล์)

@@ -2,6 +2,7 @@ import type { CollectionConfig } from 'payload'
 import { isEditorOrAdmin } from '../access'
 import { slugFrom } from '../lib/slug'
 import { revalidateAfterChange, revalidateAfterDelete } from '../hooks/revalidate'
+import { wpFields } from '../fields/wp-fields'
 
 /** WordPress `category`. Page: /category/{slug}; stories: /{slug}/{postSlug}. */
 export const Categories: CollectionConfig = {
@@ -61,5 +62,6 @@ export const Categories: CollectionConfig = {
       defaultValue: false,
       admin: { position: 'sidebar', description: 'เช่น หมวดที่ใช้จัดหน้าเว็บเท่านั้น' },
     },
+    wpFields,
   ],
 }
