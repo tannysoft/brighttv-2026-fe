@@ -2,7 +2,7 @@ import ArticleCard from "./ArticleCard";
 import type { WPPost } from "@/lib/wp";
 import { formatViews } from "@/lib/utils";
 
-// Leaderboard row used by both the homepage "กำลังเป็นที่สนใจ" and the
+// Leaderboard row used by both the homepage "Hot News" and the
 // article page "ข่าวยอดนิยม" sidebars. Left column stacks a big rank number
 // on top and the formatted view count underneath, visually binding both
 // "trending" metrics into the same accent block. Title column (ArticleCard

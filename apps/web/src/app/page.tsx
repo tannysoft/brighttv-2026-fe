@@ -164,7 +164,7 @@ async function PopularSidebar({ posts: raw }: { posts: import("@/lib/wp").Sideba
   if (!posts.length) return null;
   return (
     <section>
-      <SectionTitle title="กำลังเป็นที่สนใจ" accent="red" />
+      <SectionTitle title="Hot News" accent="red" />
       <ol className="space-y-5">
         {posts.map((p, i) => (
           <RankedItem key={p.id} post={p} rank={i + 1} />
